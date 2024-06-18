@@ -1,0 +1,4 @@
+*.csv
+*.lock
+ps_add_scrapping/target/*
+
