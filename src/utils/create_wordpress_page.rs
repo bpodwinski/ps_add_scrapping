@@ -9,6 +9,7 @@ pub async fn create_wordpress_page(
     wordpress_url: &str,
     username: &str,
     password: &str,
+    parent_id: i32,
 ) -> Result<String, Error> {
     let client = Client::new();
     let url = format!("{}/wp-json/wp/v2/pages", wordpress_url);
@@ -24,7 +25,8 @@ pub async fn create_wordpress_page(
         "title": title,
         "content": content,
         "status": status,
-        "post_author": "1"
+        "post_author": "1",
+        "parent": parent_id
     });
 
     let response = client
@@ -36,7 +38,7 @@ pub async fn create_wordpress_page(
 
     // Extract and print the raw response body regardless of the status
     let body = response.text().await?;
-    println!("Raw response body: {}", body);
+    //println!("Raw response body: {}", body);
 
     // Simply return the raw body as a string
     Ok(body)

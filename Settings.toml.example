@@ -1,0 +1,15 @@
+[base]
+name = "PS Add Scrapping"
+version = "1.0.0"
+
+[file]
+source_data = "data.csv"
+processing_data = "data_updated.csv"
+
+[flaresolverr]
+flaresolverr_url = "http://your_flare_proxy_url.com/v1"
+
+[wordpress_api]
+wordpress_url = "http://your_wordpress.com"
+username_api = "your_user_wp"
+password_api = "your_app_password_wp"
