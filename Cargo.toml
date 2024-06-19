@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.86"
 base64 = "0.22.1"
 chrono = "0.4.38"
 config = "0.14.0"
@@ -18,3 +19,4 @@ serde = { version = "1.0.203", features = ["derive"] }
 serde_json = "1.0.117"
 tokio = { version = "1.38.0", features = ["full"] }
 toml = "0.8.14"
+urlencoding = "2.1.3"

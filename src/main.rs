@@ -1,12 +1,13 @@
-use config::{Config, ConfigError, Environment, File};
 use csv_async::{AsyncReaderBuilder, AsyncWriterBuilder};
 use futures::stream::StreamExt;
-use reqwest::{header, Client};
-use serde::Deserialize;
+use reqwest::Client;
 use serde_json::json;
 use tokio;
 use tokio::fs::File as AsyncFile;
 use tokio::io::{BufReader, BufWriter};
+
+// Import modules
+mod config;
 
 // Utils import
 mod utils;
@@ -25,65 +26,17 @@ use utils::extract_product_id;
 //use utils::extract_publication_date;
 use utils::extract_title;
 
-#[derive(Deserialize)]
-struct FlareSolverrResponse {
-    solution: Solution,
-}
-
-#[derive(Deserialize)]
-struct Solution {
-    url: String,
-    response: String,
-}
-
-#[derive(Deserialize)]
-struct AppConfig {
-    base: BaseConfig,
-    file: FileConfig,
-    flaresolverr: FlareSolverrConfig,
-    wordpress_api: WordPressApiConfig,
-}
-
-#[derive(Deserialize)]
-struct BaseConfig {
-    name: String,
-    version: String,
-}
-
-#[derive(Deserialize)]
-struct FileConfig {
-    source_data: String,
-    processing_data: String,
-}
-
-#[derive(Deserialize)]
-struct FlareSolverrConfig {
-    flaresolverr_url: String,
-}
-
-#[derive(Deserialize)]
-struct WordPressApiConfig {
-    wordpress_url: String,
-    username_api: String,
-    password_api: String,
-}
-
-fn load_config() -> Result<AppConfig, ConfigError> {
-    let mut settings = Config::builder()
-        .add_source(File::new("Settings.toml", config::FileFormat::Toml))
-        .add_source(Environment::with_prefix("APP"))
-        .build()?
-        .try_deserialize::<AppConfig>()?;
-
-    Ok(settings)
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = load_config()?;
-    println!("Application Name: {}", config.base.name);
 
-    let root_id_page = 6559;
+    let config = match config::load_config() {
+        Ok(cfg) => cfg, // Si le chargement réussit, stocke la configuration dans la variable config
+        Err(e) => {
+            eprintln!("Failed to load configuration: {}", e);
+            return Err(e.into());
+        }
+    };
+
     // Setup CSV reading
     let file = AsyncFile::open(&config.file.source_data).await?;
     let reader = BufReader::new(file);
@@ -105,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     csv_writer.write_record(headers).await?;
 
     let client = Client::new();
-    let max_concurrency = 5;
+    let max_concurrency = 1;
 
     // Utilise directement le stream des enregistrements
     let records_stream = csv_reader.records();
@@ -142,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             if resp.status().is_success() {
 
                                 //let body: FlareSolverrResponse = resp.json().await;
-                                let body: Result<FlareSolverrResponse, reqwest::Error> = resp.json().await;
+                                let body: Result<config::config::FlareSolverrResponse, reqwest::Error> = resp.json().await;
 
                                 if let Ok(body) = body {
                                 let ps_url = &body.solution.url;
@@ -171,7 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 // Create page to Wordpress
                                 let content = "<p>This is a test page</p>";
                                 let status = "draft";
-                                let mut current_parent_id = root_id_page;
+                                let mut current_parent_id = config.base.root_id_page;
 
                                 for breadcrumb in &breadcrumbs {
                                     if let Some(name) = breadcrumb.get("name") {
