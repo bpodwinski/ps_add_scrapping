@@ -116,12 +116,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 if let Ok(body) = body {
 
                                     // Extract data scraped from server flaresolverr
-                                    let breadcrumbs = extract_data::extract_data(&body);
+                                    let extract_data = extract_data::extract_data(&body);
 
                                     let mut current_parent_id = config.wordpress_page.parent;
 
                                     // Create WordPress pages using hierarchy breadcrumbs extracted from scraped data
-                                    for breadcrumb in &breadcrumbs {
+                                    for breadcrumb in extract_data.breadcrumbs {
                                         if let Some(name) = breadcrumb.get("name") {
                                             println!("Breadcrumb name: {}", name);
 
@@ -134,24 +134,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                                             // Builds template for WordPress pages using data scraped
                                             let mut template_rendered = String::new();
+
                                             match read_template_from_config().await {
                                                 Ok(mut template) => {
                                                     let template_modified = template
-                                                        .replace("[NAME]", "Alice")
-                                                        .replace("[ID_PS_PRODUCT]", "Alice")
-                                                        .replace("[PRICE_HT]", "Alice")
-                                                        .replace("[TITLE]", "Alice")
-                                                        .replace("[DEV_NAME]", "Alice")
-                                                        .replace("[MODULE_VERSION]", "Alice")
-                                                        .replace("[PUBLICATION_DATE]", "Alice")
-                                                        .replace("[LAST_UPDATE]", "Alice")
-                                                        .replace("[PRESTASHOP_VERSION]", "Alice")
-                                                        .replace("[AS_OVERRIDES]", "Alice")
-                                                        .replace("[IS_MULTISTORE]", "Alice")
-                                                        .replace("[DESCRIPTION]", "Alice")
-                                                        .replace("[CARACTERISTIQUES]", "Alice")
-                                                        .replace("#URL_MODULE", "Alice")
-                                                        .replace("[IMG_TAGS]", "Alice");
+                                                        .replace("[NAME]", name)
+                                                        .replace("[ID_PS_PRODUCT]", &*extract_data.product_id)
+                                                        .replace("[PRICE_HT]", &*extract_data.price_ht)
+                                                        .replace("[TITLE]", &*extract_data.title)
+                                                        .replace("[DEV_NAME]", &*extract_data.developer_name)
+                                                        .replace("[MODULE_VERSION]", "module_version")
+                                                        .replace("[PUBLICATION_DATE]", "pub_date")
+                                                        .replace("[LAST_UPDATE]", "last_update")
+                                                        .replace("[PRESTASHOP_VERSION]", "ps_version")
+                                                        .replace("[AS_OVERRIDES]", "as_overrides")
+                                                        .replace("[IS_MULTISTORE]", "is_multistores")
+                                                        .replace("[DESCRIPTION]", "desc")
+                                                        .replace("[CARACTERISTIQUES]", "caract")
+                                                        .replace("#URL_MODULE", "url_module")
+                                                        .replace("[IMG_TAGS]", "img");
                                                     template_rendered = template_modified;
                                                 }
                                                 Err(e) => eprintln!("Failed to read template: {}", e),
@@ -164,6 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 username,
                                                 password,
                                                 template_final,
+                                                &*extract_data.product_id,
                                                 status,
                                                 config.wordpress_page.author,
                                                 current_parent_id,

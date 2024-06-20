@@ -6,6 +6,7 @@ use serde_json::json;
 pub async fn create_wordpress_page(
     title: &str,
     content: &str,
+    product_id: &str,
     status: &str,
     author: i32,
     wordpress_url: &str,
@@ -24,6 +25,9 @@ pub async fn create_wordpress_page(
         "post_type": "page",
         "title": title,
         "content": content,
+        "meta": {
+            "ps_product_id": product_id
+        },
         "status": status,
         "author": author,
         "parent": parent

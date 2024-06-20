@@ -6,6 +6,7 @@ pub async fn add_page(
     username: &String,
     password: &String,
     content: &str,
+    product_id: &str,
     status: &str,
     author: i32,
     mut current_parent_id: i32,
@@ -14,6 +15,7 @@ pub async fn add_page(
     match create_wordpress_page::create_wordpress_page(
         name, // Using breadcrumb name for page title
         content,
+        product_id,
         status,
         author,
         wordpress_url,
