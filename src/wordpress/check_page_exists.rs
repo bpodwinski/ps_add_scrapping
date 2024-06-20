@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
+use htmlentity::entity::{decode, ICodedDataTrait};
 use reqwest::Client;
 use serde_json::json;
 use serde_json::Value;
@@ -36,10 +37,14 @@ pub async fn check_page_exists(
             .await
             .context("Failed to parse search response")?;
 
+        let decoded_title = decode(title.as_bytes()).to_string()?;
+
         if !pages.is_empty() {
             for page in pages {
-                let found_title = page["title"]["rendered"].as_str().unwrap_or_default();
-                if found_title == title {
+                let found_title_encoded = page["title"]["rendered"].as_str().unwrap_or_default();
+                let found_title = decode(found_title_encoded.as_bytes()).to_string()?;
+
+                if found_title == decoded_title {
                     let json_response = json!({
                         "status": "exists",
                         "message": "Page already exists",

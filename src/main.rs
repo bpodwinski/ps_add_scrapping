@@ -30,7 +30,7 @@ use scraping::extract_title;
 // Import wordpress
 mod wordpress;
 use wordpress::create_wordpress_page;
-//use wordpress::check_page_exists;
+use wordpress::check_page_exists;
 
 #[derive(Deserialize, Serialize, Debug)]
 struct JsonResponse {
@@ -143,7 +143,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                                 for breadcrumb in &breadcrumbs {
                                     if let Some(name) = breadcrumb.get("name") {
-                                        println!("Nom du Breadcrumb: {}", name);
+                                        println!("Nom du breadcrumb: {}", name);
+
+                                        // Vérifier si la page existe déjà
+                                        let check_response = check_page_exists::check_page_exists(
+                                            name,
+                                            wordpress_url,
+                                            username,
+                                            password,
+                                        ).await;
+
+                                        match check_response {
+                                            Ok(Some(response)) => {
+                                                // Page exists, handle this case
+                                                println!("Page already exists, response: {}", response);
+                                                continue;  // Continue to the next breadcrumb if the page already exists
+                                            },
+                                            Ok(None) => {
+                                                println!("No existing page found, proceeding to create a new page.");
+                                            },
+                                            Err(e) => {
+                                                eprintln!("Error checking if page exists: {}", e);
+                                                continue;  // Optionally continue to the next breadcrumb if there's an error
+                                            }
+                                        }
 
                                         // Appel de la fonction pour créer une page WordPress avec le parent ID actuel
                                         match create_wordpress_page::create_wordpress_page(
@@ -167,7 +190,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                             if let Some(status) = json_value.get("status").and_then(|v| v.as_str()) {
                                                                 if status == "exists" {
                                                                     println!("Status is 'exists'");
-                                                                    // Ici tu peux ajouter la logique à exécuter si le statut est 'exists'
+                                                                    continue;
                                                                 } else {
                                                                     println!("Status is not 'exists', but '{}'", status);
                                                                 }
