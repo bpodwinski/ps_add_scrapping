@@ -5,6 +5,7 @@ version = "1.0.0"
 [file]
 source_data = "data.csv"
 processing_data = "data_updated.csv"
+template = "template_page.txt"
 
 [flaresolverr]
 flaresolverr_url = "http://your_flare_proxy_url.com/v1"

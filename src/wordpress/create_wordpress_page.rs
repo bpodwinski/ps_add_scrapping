@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD_NO_PAD};
 use reqwest::Client;
 use serde_json::json;
 
@@ -7,10 +7,11 @@ pub async fn create_wordpress_page(
     title: &str,
     content: &str,
     status: &str,
+    author: i32,
     wordpress_url: &str,
     username: &str,
     password: &str,
-    parent_id: i32,
+    parent: i32,
 ) -> Result<String> {
     let client = Client::new();
     let credentials = format!("{}:{}", username, password);
@@ -24,8 +25,8 @@ pub async fn create_wordpress_page(
         "title": title,
         "content": content,
         "status": status,
-        "post_author": "1",
-        "parent": parent_id
+        "author": author,
+        "parent": parent
     });
 
     let response = client

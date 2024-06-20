@@ -7,6 +7,7 @@ pub async fn add_page(
     password: &String,
     content: &str,
     status: &str,
+    author: i32,
     mut current_parent_id: i32,
     name: &String,
 ) {
@@ -14,6 +15,7 @@ pub async fn add_page(
         name, // Using breadcrumb name for page title
         content,
         status,
+        author,
         wordpress_url,
         username,
         password,

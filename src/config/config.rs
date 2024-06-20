@@ -18,13 +18,13 @@ pub struct AppConfig {
     pub file: FileConfig,
     pub flaresolverr: FlareSolverrConfig,
     pub wordpress_api: WordPressApiConfig,
+    pub wordpress_page: WordPressPageConfig,
 }
 
 #[derive(Deserialize)]
 pub struct BaseConfig {
     pub name: String,
     pub version: String,
-    pub root_id_page: i32,
 }
 
 #[derive(Deserialize)]
@@ -43,6 +43,14 @@ pub struct WordPressApiConfig {
     pub wordpress_url: String,
     pub username_api: String,
     pub password_api: String,
+}
+
+#[derive(Deserialize)]
+pub struct WordPressPageConfig {
+    pub template: String,
+    pub status: String,
+    pub parent: i32,
+    pub author: i32,
 }
 
 pub fn load_config() -> Result<AppConfig, ConfigError> {

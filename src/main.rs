@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio;
 use tokio::fs::File as AsyncFile;
-use tokio::io::{BufReader, BufWriter};
+use tokio::io::{AsyncReadExt, BufReader, BufWriter};
 
 // Scraping utilities
 use scraping::{
@@ -56,6 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let wordpress_url = &config.wordpress_api.wordpress_url;
     let username = &config.wordpress_api.username_api;
     let password = &config.wordpress_api.password_api;
+    let status = &config.wordpress_page.status;
 
     // Setup CSV file reading
     let file = AsyncFile::open(&config.file.source_data).await?;
@@ -117,10 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     // Extract data scraped from server flaresolverr
                                     let breadcrumbs = extract_data::extract_data(&body);
 
-                                    // Builds template for WordPress pages using data scraped
-                                    let content = "<p>This is a test page</p>";
-                                    let status = "draft";
-                                    let mut current_parent_id = config.base.root_id_page;
+                                    let mut current_parent_id = config.wordpress_page.parent;
 
                                     // Create WordPress pages using hierarchy breadcrumbs extracted from scraped data
                                     for breadcrumb in &breadcrumbs {
@@ -134,12 +132,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 name,
                                             ).await { continue; }
 
+                                            // Builds template for WordPress pages using data scraped
+                                            let mut template_rendered = String::new();
+                                            match read_template_from_config().await {
+                                                Ok(mut template) => {
+                                                    let template_modified = template
+                                                        .replace("[NAME]", "Alice")
+                                                        .replace("[ID_PS_PRODUCT]", "Alice")
+                                                        .replace("[PRICE_HT]", "Alice")
+                                                        .replace("[TITLE]", "Alice")
+                                                        .replace("[DEV_NAME]", "Alice")
+                                                        .replace("[MODULE_VERSION]", "Alice")
+                                                        .replace("[PUBLICATION_DATE]", "Alice")
+                                                        .replace("[LAST_UPDATE]", "Alice")
+                                                        .replace("[PRESTASHOP_VERSION]", "Alice")
+                                                        .replace("[AS_OVERRIDES]", "Alice")
+                                                        .replace("[IS_MULTISTORE]", "Alice")
+                                                        .replace("[DESCRIPTION]", "Alice")
+                                                        .replace("[CARACTERISTIQUES]", "Alice")
+                                                        .replace("#URL_MODULE", "Alice")
+                                                        .replace("[IMG_TAGS]", "Alice");
+                                                    template_rendered = template_modified;
+                                                }
+                                                Err(e) => eprintln!("Failed to read template: {}", e),
+                                            };
+
+                                            let template_final = template_rendered.as_str();
+
                                             add_page::add_page(
                                                 wordpress_url,
                                                 username,
                                                 password,
-                                                content,
+                                                template_final,
                                                 status,
+                                                config.wordpress_page.author,
                                                 current_parent_id,
                                                 name,
                                             ).await;
@@ -160,4 +186,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }).await;
     Ok(())
+}
+
+async fn read_template_from_config() -> Result<String, std::io::Error> {
+    // Load configuration settings
+    //let config = match config::load_config() {
+    //    Ok(cfg) => cfg,
+    //    Err(e) => {
+    //        eprintln!("Failed to load configuration: {}", e);
+    //        return Err(e.into());
+    //    }
+    //};
+
+    // Tentez d'ouvrir le fichier et gérez l'erreur éventuelle
+    let mut file = AsyncFile::open("template_page.txt").await?;
+    let mut template = String::new();
+    // Lisez le fichier dans la chaîne 'template' et gérez l'erreur éventuelle
+    file.read_to_string(&mut template).await?;
+    Ok(template)
 }
