@@ -7,30 +7,24 @@ use tokio::fs::File as AsyncFile;
 use tokio::io::{BufReader, BufWriter};
 use serde::{Deserialize, Serialize};
 
-// Import configuration
+// Import modules
 mod config;
-
-// Import scraping
 mod scraping;
-//use scraping::check_page_exists;
-use scraping::extract_breadcrumb;
-//use scraping::extract_caracteristiques;
-//use scraping::extract_description;
-//use scraping::extract_developer_name;
-//use scraping::extract_last_update;
-//use scraping::extract_meta_description;
-//use scraping::extract_module_version;
-//use scraping::extract_multistore_compatibility;
-//use scraping::extract_override;
-use scraping::extract_price_ht;
-use scraping::extract_product_id;
-//use scraping::extract_publication_date;
-use scraping::extract_title;
-
-// Import wordpress
 mod wordpress;
-use wordpress::create_wordpress_page;
-use wordpress::check_page_exists;
+
+// Scraping utilities
+use scraping::{
+    extract_breadcrumb,
+    extract_price_ht,
+    extract_product_id,
+    extract_title,
+};
+
+// WordPress functionality
+use wordpress::{
+    create_wordpress_page,
+    check_page_exists,
+};
 
 #[derive(Deserialize, Serialize, Debug)]
 struct JsonResponse {
@@ -43,7 +37,7 @@ struct JsonResponse {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
-    // Get configuration
+    // Load configuration settings
     let config = match config::load_config() {
         Ok(cfg) => cfg,
         Err(e) => {
@@ -57,15 +51,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let username = &config.wordpress_api.username_api;
     let password = &config.wordpress_api.password_api;
 
-    // Setup CSV reading
+    // Setup CSV file reading
     let file = AsyncFile::open(&config.file.source_data).await?;
     let reader = BufReader::new(file);
     let mut csv_reader = AsyncReaderBuilder::new().create_reader(reader);
 
-    // Attempt to read headers
+    // Read headers from CSV file
     let headers = csv_reader.headers().await?;
 
-    // Setup CSV writing
+    // Setup CSV file writing
     let file_out = AsyncFile::create(&config.file.processing_data).await?;
     let writer = BufWriter::new(file_out);
     let mut csv_writer = AsyncWriterBuilder::new()
@@ -74,31 +68,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .double_quote(true)
         .create_writer(writer);
 
-    // Write headers to the new CSV
+    // Write headers to the new CSV file
     csv_writer.write_record(headers).await?;
 
+    // Process records from the CSV file
     let client = Client::new();
     let max_concurrency = 1;
 
-    // Utilise directement le stream des enregistrements
     let records_stream = csv_reader.records();
-
-    // Traitement des URLs avec une concurrence limitée
     records_stream
         .for_each_concurrent(max_concurrency, |record_result| {
-            let client = client.clone(); // Cloner le client pour l'usage dans l'async block
+            let client = client.clone(); // Clone client for async block usage
             
             async move {
                 match record_result {
                     Ok(record) => {
                         
-                        let url = record.get(0).unwrap_or_default(); // Assure-toi que l'index est correct
+                        let url = record.get(0).unwrap_or_default();
                         let data = json!({
                             "cmd": "request.get",
                             "url": url,
                             "maxTimeout": 60000
                         });
 
+                        // Send url csv at scrape to server flaresolverr
                         let response: Result<reqwest::Response, reqwest::Error> = client
                             .post(flaresolverr_url)
                             .header(reqwest::header::CONTENT_TYPE, "application/json")
@@ -113,141 +106,119 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 let body: Result<config::config::FlareSolverrResponse, reqwest::Error> = resp.json().await;
 
                                 if let Ok(body) = body {
-                                let ps_url = &body.solution.url;
-                                let title = extract_title::extract_title(&body.solution.response);
-                                let product_id =
-                                    extract_product_id::extract_product_id(&body.solution.response);
-                                let price_ht =
-                                    extract_price_ht::extract_price_ht(&body.solution.response);
 
-                                match product_id {
-                                    Some(value) => println!("product_id: {}", value),
-                                    None => println!("product_id: {}", ""),
-                                }
+                                    // Extract data scraped from server flaresolverr
+                                    let ps_url = &body.solution.url;
+                                    let title = extract_title::extract_title(&body.solution.response);
+                                    let product_id =
+                                        extract_product_id::extract_product_id(&body.solution.response);
+                                    let price_ht =
+                                        extract_price_ht::extract_price_ht(&body.solution.response);
+                                    let breadcrumbs =
+                                        extract_breadcrumb::extract_breadcrumb(&body.solution.response);
 
-                                let breadcrumbs =
-                                    extract_breadcrumb::extract_breadcrumb(&body.solution.response);
+                                    match product_id {
+                                        Some(value) => println!("Product ID: {}", value),
+                                        None => println!("Product ID: {}", ""),
+                                    }
 
-                                println!("ps_url: {}", ps_url);
-                                println!("title: {}", title);
+                                    match price_ht {
+                                        Some(price) => println!("Price HT: {}", price),
+                                        None => println!("Price HT: {}", ""),
+                                    }
 
-                                match price_ht {
-                                    Some(price) => println!("price_ht: {}", price),
-                                    None => println!("price_ht: {}", ""),
-                                }
+                                    println!("Title: {}", title);
+                                    println!("PS Url: {}", ps_url);
 
-                                // Create page to Wordpress
-                                let content = "<p>This is a test page</p>";
-                                let status = "draft";
-                                let mut current_parent_id = config.base.root_id_page;
+                                    // Builds template for WordPress pages using data scraped
+                                    let content = "<p>This is a test page</p>";
+                                    let status = "draft";
+                                    let mut current_parent_id = config.base.root_id_page;
 
-                                for breadcrumb in &breadcrumbs {
-                                    if let Some(name) = breadcrumb.get("name") {
-                                        println!("Nom du breadcrumb: {}", name);
+                                    // Create WordPress pages using hierarchy breadcrumbs extracted from scraped data
+                                    for breadcrumb in &breadcrumbs {
+                                        if let Some(name) = breadcrumb.get("name") {
 
-                                        // Vérifier si la page existe déjà
-                                        let check_response = check_page_exists::check_page_exists(
-                                            name,
-                                            wordpress_url,
-                                            username,
-                                            password,
-                                        ).await;
+                                            println!("Breadcrumb name: {}", name);
 
-                                        match check_response {
-                                            Ok(Some(response)) => {
-                                                // Page exists, handle this case
-                                                println!("Page already exists, response: {}", response);
-                                                continue;  // Continue to the next breadcrumb if the page already exists
-                                            },
-                                            Ok(None) => {
-                                                println!("No existing page found, proceeding to create a new page.");
-                                            },
-                                            Err(e) => {
-                                                eprintln!("Error checking if page exists: {}", e);
-                                                continue;  // Optionally continue to the next breadcrumb if there's an error
-                                            }
-                                        }
+                                            // Check if page already exist
+                                            let check_response = check_page_exists::check_page_exists(
+                                                name,
+                                                wordpress_url,
+                                                username,
+                                                password,
+                                            ).await;
 
-                                        // Appel de la fonction pour créer une page WordPress avec le parent ID actuel
-                                        match create_wordpress_page::create_wordpress_page(
-                                            name, // Utilisation du nom du breadcrumb pour le titre de la page
-                                            content,
-                                            status,
-                                            wordpress_url,
-                                            username,
-                                            password,
-                                            current_parent_id, // Utilisation de l'ID parent actuel
-                                        )
-                                        .await
-                                        {
-                                            Ok(response) => {
-                                                println!("Page created successfully");
-                                                println!("Raw response: {}", response);
-
-                                                match serde_json::from_str::<serde_json::Value>(&response) {
-                                                        Ok(json_value) => {
-                                                            // Vérifier si le statut "exists" est présent
-                                                            if let Some(status) = json_value.get("status").and_then(|v| v.as_str()) {
-                                                                if status == "exists" {
-                                                                    println!("Status is 'exists'");
-                                                                    continue;
-                                                                } else {
-                                                                    println!("Status is not 'exists', but '{}'", status);
-                                                                }
-                                                            } else {
-                                                                eprintln!("The key 'status' does not exist in the JSON response.");
-                                                            }
-
-                                                            // Optionnel: Continuer à traiter d'autres parties de la réponse si nécessaire
-                                                        },
-                                                        Err(e) => {
-                                                            eprintln!("Erreur lors de l'analyse de la réponse JSON: {}", e);
-                                                        }
-                                                    }
-
-                                                // Traitement de la réponse JSON pour extraire l'ID de la page créée
-                                                match serde_json::from_str::<serde_json::Value>(
-                                                    &response,
-                                                ) {
-                                                    Ok(json_value) => {
-                                                        if let Some(id) = json_value
-                                                            .get("id")
-                                                            .and_then(|v| v.as_i64())
-                                                        {
-                                                            current_parent_id = id as i32; // Mise à jour du parent_id pour le prochain breadcrumb
-                                                            println!(
-                                                                "ID de la nouvelle page: {}",
-                                                                current_parent_id
-                                                            );
-                                                        } else {
-                                                            eprintln!("L'ID de la page n'a pas pu être extrait de la réponse.");
-                                                        }
-                                                    }
-                                                    Err(e) => {
-                                                        eprintln!("Erreur lors de l'analyse de la réponse JSON: {}", e);
-                                                    }
+                                            match check_response {
+                                                Ok(Some(response)) => {
+                                                    println!("Page already exists, response: {}", response);
+                                                    continue;
+                                                },
+                                                Ok(None) => {
+                                                    println!("No existing page found, proceeding to create a new page");
+                                                },
+                                                Err(e) => {
+                                                    eprintln!("Error checking if page exists: {}", e);
+                                                    continue;
                                                 }
                                             }
-                                            Err(e) => eprintln!("Error creating page: {:?}", e),
+
+                                            // Create WordPress page if not exists
+                                            match create_wordpress_page::create_wordpress_page(
+                                                name, // Using breadcrumb name for page title
+                                                content,
+                                                status,
+                                                wordpress_url,
+                                                username,
+                                                password,
+                                                current_parent_id,
+                                            )
+                                            .await
+                                            {
+                                                Ok(response) => {
+                                                    println!("Page created successfully");
+                                                    //println!("Page created successfully, raw response: {}", response);
+
+                                                    // Processing the JSON response to extract the ID of the created page
+                                                    match serde_json::from_str::<serde_json::Value>(
+                                                        &response,
+                                                    ) {
+                                                        Ok(json_value) => {
+                                                            if let Some(id) = json_value
+                                                                .get("id")
+                                                                .and_then(|v| v.as_i64())
+                                                            {
+                                                                current_parent_id = id as i32; // Set this ID as the parent ID for the next pages
+                                                                println!(
+                                                                    "Updating parent_id for the next pages: {}",
+                                                                    current_parent_id
+                                                                );
+                                                            } else {
+                                                                eprintln!("Failed to extract parent_id from the response");
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            eprintln!("Error while parsing the JSON response: {}", e);
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => eprintln!("Error creating page: {:?}", e),
+                                            }
                                         }
                                     }
+                                } else {
+                                    eprintln!("Failed to deserialize response");
                                 }
-                            } else {
-                                eprintln!("Failed to deserialize response");
                             }
-
-                            } else {
-                                }
-                            } else {
-                                // Logique pour gérer les erreurs de requête
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("Failed to read CSV record: {}", e);
+                        } else {
+                            // todo: ajouter une logique pour gérer les erreurs de requête
                         }
                     }
+                    Err(e) => {
+                        eprintln!("Failed to read CSV record: {}", e);
+                    }
                 }
-            })
-            .await;
+            }
+        }).await;
     Ok(())
 }

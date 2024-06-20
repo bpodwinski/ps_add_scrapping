@@ -18,7 +18,6 @@ pub async fn check_page_exists(
     let encoded_credentials = engine.encode(credentials.as_bytes());
     let basic_auth = format!("Basic {}", encoded_credentials);
 
-    // Vérifier si la page existe déjà
     let encoded_title = encode(title);
     let search_url = format!(
         "{}/wp-json/wp/v2/pages?search={}&status=draft,publish",
