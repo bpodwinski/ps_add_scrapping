@@ -11,5 +11,3 @@ pub mod extract_price_ht;
 pub mod extract_product_id;
 //pub mod extract_publication_date;
 pub mod extract_title;
-
-pub mod create_wordpress_page;
