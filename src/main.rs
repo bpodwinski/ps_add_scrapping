@@ -1,16 +1,13 @@
+use std::collections::HashMap;
+
 use csv_async::{AsyncReaderBuilder, AsyncWriterBuilder};
 use futures::stream::StreamExt;
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio;
 use tokio::fs::File as AsyncFile;
 use tokio::io::{BufReader, BufWriter};
-use serde::{Deserialize, Serialize};
-
-// Import modules
-mod config;
-mod scraping;
-mod wordpress;
 
 // Scraping utilities
 use scraping::{
@@ -19,12 +16,21 @@ use scraping::{
     extract_product_id,
     extract_title,
 };
-
 // WordPress functionality
 use wordpress::{
-    create_wordpress_page,
     check_page_exists,
+    create_wordpress_page,
 };
+
+use crate::config::config::FlareSolverrResponse;
+
+// Import modules
+mod config;
+mod scraping;
+mod wordpress;
+mod add_page;
+mod check_page;
+mod extract_data;
 
 #[derive(Deserialize, Serialize, Debug)]
 struct JsonResponse {
@@ -78,12 +84,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let records_stream = csv_reader.records();
     records_stream
         .for_each_concurrent(max_concurrency, |record_result| {
-            let client = client.clone(); // Clone client for async block usage
-            
+
+            // Clone client for async block usage
+            let client = client.clone();
+
             async move {
                 match record_result {
                     Ok(record) => {
-                        
                         let url = record.get(0).unwrap_or_default();
                         let data = json!({
                             "cmd": "request.get",
@@ -108,27 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 if let Ok(body) = body {
 
                                     // Extract data scraped from server flaresolverr
-                                    let ps_url = &body.solution.url;
-                                    let title = extract_title::extract_title(&body.solution.response);
-                                    let product_id =
-                                        extract_product_id::extract_product_id(&body.solution.response);
-                                    let price_ht =
-                                        extract_price_ht::extract_price_ht(&body.solution.response);
-                                    let breadcrumbs =
-                                        extract_breadcrumb::extract_breadcrumb(&body.solution.response);
-
-                                    match product_id {
-                                        Some(value) => println!("Product ID: {}", value),
-                                        None => println!("Product ID: {}", ""),
-                                    }
-
-                                    match price_ht {
-                                        Some(price) => println!("Price HT: {}", price),
-                                        None => println!("Price HT: {}", ""),
-                                    }
-
-                                    println!("Title: {}", title);
-                                    println!("PS Url: {}", ps_url);
+                                    let breadcrumbs = extract_data::extract_data(&body);
 
                                     // Builds template for WordPress pages using data scraped
                                     let content = "<p>This is a test page</p>";
@@ -138,72 +125,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     // Create WordPress pages using hierarchy breadcrumbs extracted from scraped data
                                     for breadcrumb in &breadcrumbs {
                                         if let Some(name) = breadcrumb.get("name") {
-
                                             println!("Breadcrumb name: {}", name);
 
-                                            // Check if page already exist
-                                            let check_response = check_page_exists::check_page_exists(
-                                                name,
+                                            if check_page::check_page(
                                                 wordpress_url,
                                                 username,
                                                 password,
-                                            ).await;
+                                                name,
+                                            ).await { continue; }
 
-                                            match check_response {
-                                                Ok(Some(response)) => {
-                                                    println!("Page already exists, response: {}", response);
-                                                    continue;
-                                                },
-                                                Ok(None) => {
-                                                    println!("No existing page found, proceeding to create a new page");
-                                                },
-                                                Err(e) => {
-                                                    eprintln!("Error checking if page exists: {}", e);
-                                                    continue;
-                                                }
-                                            }
-
-                                            // Create WordPress page if not exists
-                                            match create_wordpress_page::create_wordpress_page(
-                                                name, // Using breadcrumb name for page title
+                                            add_page::add_page(
+                                                wordpress_url,
+                                                username,
+                                                password,
                                                 content,
                                                 status,
-                                                wordpress_url,
-                                                username,
-                                                password,
                                                 current_parent_id,
-                                            )
-                                            .await
-                                            {
-                                                Ok(response) => {
-                                                    println!("Page created successfully");
-                                                    //println!("Page created successfully, raw response: {}", response);
-
-                                                    // Processing the JSON response to extract the ID of the created page
-                                                    match serde_json::from_str::<serde_json::Value>(
-                                                        &response,
-                                                    ) {
-                                                        Ok(json_value) => {
-                                                            if let Some(id) = json_value
-                                                                .get("id")
-                                                                .and_then(|v| v.as_i64())
-                                                            {
-                                                                current_parent_id = id as i32; // Set this ID as the parent ID for the next pages
-                                                                println!(
-                                                                    "Updating parent_id for the next pages: {}",
-                                                                    current_parent_id
-                                                                );
-                                                            } else {
-                                                                eprintln!("Failed to extract parent_id from the response");
-                                                            }
-                                                        }
-                                                        Err(e) => {
-                                                            eprintln!("Error while parsing the JSON response: {}", e);
-                                                        }
-                                                    }
-                                                }
-                                                Err(e) => eprintln!("Error creating page: {:?}", e),
-                                            }
+                                                name,
+                                            ).await;
                                         }
                                     }
                                 } else {

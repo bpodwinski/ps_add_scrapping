@@ -8,7 +8,7 @@
     "version": "0.2.0",
     "configurations": [
       {
-        "name": "(Windows) Launch",
+        "name": "Debug Launch (Windows)",
         "type": "cppvsdbg",
         "request": "launch",
         "program": "${workspaceRoot}/target/debug/ps_add_scrapping.exe",
@@ -16,7 +16,7 @@
         "stopAtEntry": false,
         "cwd": "${workspaceRoot}",
         "environment": [],
-        "console": "externalTerminal"
+        "console": "internalConsole"
       }
     ]
   }
