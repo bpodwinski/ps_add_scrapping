@@ -14,8 +14,15 @@ use tokio::io::{AsyncReadExt, BufReader, BufWriter};
 // Scraping utilities
 use scraping::{
     extract_breadcrumb,
+    extract_caracteristiques,
+    extract_description,
+    extract_last_update,
+    extract_module_version,
+    extract_multistore_compatibility,
+    extract_override,
     extract_price_ht,
     extract_product_id,
+    extract_publication_date,
     extract_title,
 };
 // WordPress functionality
@@ -146,14 +153,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                         .replace("[PRICE_HT]", &*extract_data.price_ht)
                                                         .replace("[TITLE]", &*extract_data.title)
                                                         .replace("[DEV_NAME]", &*extract_data.developer_name)
-                                                        .replace("[MODULE_VERSION]", "module_version")
-                                                        .replace("[PUBLICATION_DATE]", "pub_date")
-                                                        .replace("[LAST_UPDATE]", "last_update")
+                                                        .replace("[MODULE_VERSION]", &*extract_data.module_version)
+                                                        .replace("[PUBLICATION_DATE]", &*extract_data.publication_date)
+                                                        .replace("[LAST_UPDATE]", &*extract_data.last_update)
                                                         .replace("[PRESTASHOP_VERSION]", "ps_version")
                                                         .replace("[AS_OVERRIDES]", "as_overrides")
-                                                        .replace("[IS_MULTISTORE]", "is_multistores")
-                                                        .replace("[DESCRIPTION]", "desc")
-                                                        .replace("[CARACTERISTIQUES]", "caract")
+                                                        .replace("[IS_MULTISTORE]", &*extract_data.multistore_compatibility)
+                                                        .replace("[DESCRIPTION]", &*extract_data.description)
+                                                        .replace("[CARACTERISTIQUES]", &*extract_data.caracteristiques)
                                                         .replace("#URL_MODULE", "url_module")
                                                         .replace("[IMG_TAGS]", "img");
                                                     template_rendered = template_modified;
