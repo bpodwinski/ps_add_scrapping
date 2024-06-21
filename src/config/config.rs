@@ -25,6 +25,7 @@ pub struct AppConfig {
 pub struct BaseConfig {
     pub name: String,
     pub version: String,
+    pub max_concurrency: Option<usize>,
 }
 
 #[derive(Deserialize)]

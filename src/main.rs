@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
+use anyhow::Error;
+use colored::*;
 use csv_async::{AsyncReaderBuilder, AsyncWriterBuilder};
 use futures::stream::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use tokio;
 use tokio::fs::File as AsyncFile;
 use tokio::io::{AsyncReadExt, BufReader, BufWriter};
@@ -28,7 +30,7 @@ use crate::config::config::FlareSolverrResponse;
 mod config;
 mod scraping;
 mod wordpress;
-mod add_page;
+//mod add_page;
 mod check_page;
 mod extract_data;
 
@@ -57,6 +59,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let username = &config.wordpress_api.username_api;
     let password = &config.wordpress_api.password_api;
     let status = &config.wordpress_page.status;
+    let author = config.wordpress_page.author;
+    let max_concurrency = config.base.max_concurrency;
 
     // Setup CSV file reading
     let file = AsyncFile::open(&config.file.source_data).await?;
@@ -80,7 +84,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Process records from the CSV file
     let client = Client::new();
-    let max_concurrency = 1;
 
     let records_stream = csv_reader.records();
     records_stream
@@ -157,20 +160,69 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 }
                                                 Err(e) => eprintln!("Failed to read template: {}", e),
                                             };
-
                                             let template_final = template_rendered.as_str();
 
-                                            add_page::add_page(
-                                                wordpress_url,
-                                                username,
-                                                password,
+                                            match create_wordpress_page::create_wordpress_page(
+                                                name, // Using breadcrumb name for page title
                                                 template_final,
                                                 &*extract_data.product_id,
                                                 status,
-                                                config.wordpress_page.author,
+                                                author,
+                                                wordpress_url,
+                                                username,
+                                                password,
                                                 current_parent_id,
-                                                name,
-                                            ).await;
+                                            ).await
+                                            {
+                                                Ok(response) => {
+                                                    // Processing the JSON response to extract the ID of the created page
+                                                    match serde_json::from_str::<serde_json::Value>(
+                                                        &response,
+                                                    ) {
+                                                        Ok(json_value) => {
+                                                            println!("Page created successfully");
+                                                            if let Some(id) = json_value
+                                                                .get("id")
+                                                                .and_then(|v| v.as_i64())
+                                                            {
+                                                                // Set this ID as the parent ID for the next pages
+                                                                current_parent_id = id as i32;
+                                                                println!(
+                                                                    "Updating parent_id for the next pages: {}",
+                                                                    current_parent_id
+                                                                );
+                                                            } else {
+                                                                eprintln!("{}", "Failed to extract parent_id from the response".red());
+                                                                continue;
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            //eprintln!("Error creating page: {}", e.to_string());
+                                                            match serde_json::from_str::<serde_json::Value>(&e.to_string()) {
+                                                                Ok(json) => {
+                                                                    if let Some(message) = json["message"].as_str() {
+                                                                        eprintln!("Detailed error: {}", message.red());
+                                                                    }
+                                                                }
+                                                                Err(_) => eprintln!("{}", "Failed to parse error information as JSON".red())
+                                                            }
+                                                            continue;
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    //eprintln!("Error creating page: {}", e.to_string());
+                                                    match serde_json::from_str::<serde_json::Value>(&e.to_string()) {
+                                                        Ok(json) => {
+                                                            if let Some(message) = json["message"].as_str() {
+                                                                eprintln!("Detailed error: {}", message.red());
+                                                            }
+                                                        }
+                                                        Err(_) => eprintln!("{}", "Failed to parse error information as JSON".red())
+                                                    }
+                                                    continue;
+                                                }
+                                            }
                                         }
                                     }
                                 } else {

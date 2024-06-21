@@ -1,8 +1,23 @@
 use anyhow::{Context, Result};
 use base64::{Engine, engine::general_purpose::STANDARD_NO_PAD};
-use reqwest::Client;
+use reqwest::{Client, StatusCode};
 use serde_json::json;
 
+/// Creates a WordPress page using the provided details.
+///
+/// # Arguments
+/// * `title` - The title of the page to create.
+/// * `content` - The HTML content of the page.
+/// * `product_id` - The product ID to attach as meta-data.
+/// * `status` - The desired status of the page (e.g., 'draft', 'publish').
+/// * `author` - The author's user ID.
+/// * `wordpress_url` - The base URL of the WordPress site.
+/// * `username` - The username for WordPress API authentication.
+/// * `password` - The password for WordPress API authentication.
+/// * `parent` - The parent ID of the page to set hierarchy.
+///
+/// # Returns
+/// A result containing the body of the response as a string if successful, or an error if not.
 pub async fn create_wordpress_page(
     title: &str,
     content: &str,
@@ -41,14 +56,18 @@ pub async fn create_wordpress_page(
         .await
         .context("Failed to send create page request")?;
 
-    if !response.status().is_success() {
-        let error_msg = format!("Failed to create page: {}", response.status());
-        anyhow::bail!(error_msg);
-    }
+    // Save the status before consuming the response
+    let status_code = response.status();
+    let response_body = response.text().await.context("Failed to read response body")?;
 
-    let body = response
-        .text()
-        .await
-        .context("Failed to read create page response text")?;
-    Ok(body)
+    match status_code {
+        StatusCode::OK | StatusCode::CREATED => serde_json::from_str(&response_body)
+            .context("Failed to parse JSON response"),
+        StatusCode::BAD_REQUEST => {
+            let error = serde_json::from_str::<serde_json::Value>(&response_body)
+                .context("Failed to parse error JSON response")?;
+            Err(anyhow::anyhow!(response_body))
+        }
+        _ => Err(anyhow::anyhow!("Failed to create page with status {}: {}", status_code, response_body))
+    }
 }

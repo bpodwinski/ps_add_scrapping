@@ -1,11 +1,11 @@
 [base]
 name = "PS Add Scrapping"
 version = "1.0.0"
+max_concurrency = 10
 
 [file]
 source_data = "data.csv"
 processing_data = "data_updated.csv"
-template = "template_page.txt"
 
 [flaresolverr]
 flaresolverr_url = "http://your_flare_proxy_url.com/v1"
@@ -14,3 +14,10 @@ flaresolverr_url = "http://your_flare_proxy_url.com/v1"
 wordpress_url = "http://your_wordpress.com"
 username_api = "your_user_wp"
 password_api = "your_app_password_wp"
+
+# https://developer.wordpress.org/rest-api/reference/pages/
+[wordpress_page]
+template = "template_page.txt"
+status = "draft" # publish, future, draft, pending, private
+parent = 1 # ID for the parent of the post
+author = 1 # ID for the author of the post
