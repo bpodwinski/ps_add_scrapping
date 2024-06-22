@@ -1,29 +1,28 @@
-use scraper::{ElementRef, Html, Selector};
+use scraper::{Html, Selector};
+use scraper::element_ref::ElementRef;
 
 pub fn extract_publication_date(html_content: &str) -> String {
     let document = Html::parse_document(html_content);
-    let selector = Selector::parse("div").unwrap();
+    let title_selector = Selector::parse("div.muik-section-item__title.puik-body-small").unwrap();
 
-    // Find the div containing the text 'Date de publication'
-    let target_div = document.select(&selector).find(|element| {
+    // Trouver le div spécifique contenant le texte 'Date de publication'
+    if let Some(title_div) = document.select(&title_selector).find(|element| {
         element.text().any(|text| text.contains("Date de publication"))
-    });
-
-    if let Some(div) = target_div {
-        // Attempt to navigate to the next sibling that is an element node
-        let mut next_node = div.next_sibling();
+    }) {
+        // Tenter de naviguer au prochain div qui contiendrait la date
+        let mut next_node = title_div.next_sibling();
         while let Some(node) = next_node {
             if let Some(element) = ElementRef::wrap(node) {
-                // Return the text of the first sibling element found
+                // Extraire et retourner la date
                 return element.text().collect::<Vec<_>>().join("").trim().to_string();
             }
             next_node = node.next_sibling();
         }
-        println!("No valid following div found.");
+        println!("No valid following div found containing the date.");
     } else {
-        println!("No div containing 'Date de publication' found.");
+        println!("No div containing 'Date de publication' title found.");
     }
 
-    // Return empty string if no valid date is found
+    // Retourner une chaîne vide si aucune date valide n'est trouvée
     String::new()
 }

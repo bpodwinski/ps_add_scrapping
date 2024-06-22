@@ -1,11 +1,29 @@
 use anyhow::{Context, Result};
-use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD_NO_PAD};
 use htmlentity::entity::{decode, ICodedDataTrait};
 use reqwest::Client;
 use serde_json::json;
 use serde_json::Value;
 use urlencoding::encode;
 
+/// Checks if a WordPress page with the given title already exists.
+///
+/// # Arguments
+/// * `title` - The title of the page to search for.
+/// * `wordpress_url` - The base URL of the WordPress site.
+/// * `username` - The username for WordPress API authentication.
+/// * `password` - The password for WordPress API authentication.
+///
+/// # Returns
+/// * `Ok(Some(String))` with a JSON containing page details if the page exists.
+/// * `Ok(None)` if no matching page is found.
+/// * `Err` with an error message if the search fails.
+///
+/// The returned JSON string includes:
+/// - `status`: Status of the search ("exists" if found).
+/// - `message`: A message indicating the result.
+/// - `page_id`: The ID of the found page if it exists.
+/// - `title`: The title of the found page.
 pub async fn check_page_exists(
     title: &str,
     wordpress_url: &str,

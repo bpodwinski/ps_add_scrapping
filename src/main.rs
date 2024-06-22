@@ -1,37 +1,16 @@
-use std::collections::HashMap;
-
-use anyhow::Error;
 use colored::*;
 use csv_async::{AsyncReaderBuilder, AsyncWriterBuilder};
 use futures::stream::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use tokio;
 use tokio::fs::File as AsyncFile;
 use tokio::io::{AsyncReadExt, BufReader, BufWriter};
 
-// Scraping utilities
-use scraping::{
-    extract_breadcrumb,
-    extract_caracteristiques,
-    extract_description,
-    extract_last_update,
-    extract_module_version,
-    extract_multistore_compatibility,
-    extract_override,
-    extract_price_ht,
-    extract_product_id,
-    extract_publication_date,
-    extract_title,
-};
 // WordPress functionality
-use wordpress::{
-    check_page_exists,
-    create_wordpress_page,
-};
-
-use crate::config::config::FlareSolverrResponse;
+use crate::wordpress::wp_create_page;
+use crate::wordpress::wp_upload_image;
 
 // Import modules
 mod config;
@@ -47,6 +26,18 @@ struct JsonResponse {
     message: String,
     page_id: Option<i32>,
     title: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct MediaResponse {
+    id: u64,
+    guid: RenderedItem,
+    source_url: String,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct RenderedItem {
+    rendered: String,
 }
 
 #[tokio::main]
@@ -119,8 +110,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         if let Ok(resp) = response {
                             if resp.status().is_success() {
-
-                                //let body: FlareSolverrResponse = resp.json().await;
                                 let body: Result<config::config::FlareSolverrResponse, reqwest::Error> = resp.json().await;
 
                                 if let Ok(body) = body {
@@ -145,34 +134,69 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             // Builds template for WordPress pages using data scraped
                                             let mut template_rendered = String::new();
 
+                                            // Images process
+                                            let mut formatted_strings = Vec::new();
+
+                                            for image_url in &*extract_data.image_urls {
+                                                println!("Uploading image from URL: {}", image_url);
+
+                                                match wp_upload_image::upload_image_wordpress(
+                                                    wordpress_url,
+                                                    username,
+                                                    password,
+                                                    image_url,
+                                                ).await {
+                                                    Ok(response) => {
+                                                        println!("Image uploaded successfully: {}", image_url);
+                                                        if let Ok(media_response) = response.json::<MediaResponse>().await {
+                                                            let formatted_string = format!("[fusion_image linktarget=\"_self\" image=\"{}\" image_id=\"{}|full\" /]", media_response.source_url, media_response.id);
+                                                            formatted_strings.push(formatted_string);
+                                                        } else {
+                                                            eprintln!("Failed to parse response as JSON: {}", image_url);
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        eprintln!("Failed to upload image: {}. Error: {}", image_url, e);
+                                                        continue;
+                                                    }
+                                                }
+                                            };
+
+                                            let mut content = String::from(r#"[fusion_images order_by="desc" picture_size="auto" hover_type="none" autoplay="no" flex_align_items="center" columns="3" column_spacing="5" show_nav="yes" mouse_scroll="no" border="no" lightbox="yes" caption_style="off" caption_title_tag="2" caption_align_medium="none" caption_align_small="none" caption_align="none" hide_on_mobile="small-visibility,medium-visibility,large-visibility"]"#);
+                                            let images_tags = formatted_strings.join("");
+                                            content.push_str(&images_tags);
+                                            content.push_str("\n[/fusion_images]");
+
                                             match read_template_from_config().await {
-                                                Ok(mut template) => {
+                                                Ok(template) => {
                                                     let template_modified = template
-                                                        .replace("[NAME]", name)
-                                                        .replace("[ID_PS_PRODUCT]", &*extract_data.product_id)
+                                                        //.replace("[NAME]", name)
+                                                        //.replace("[ID_PS_PRODUCT]", &*extract_data.product_id)
                                                         .replace("[PRICE_HT]", &*extract_data.price_ht)
                                                         .replace("[TITLE]", &*extract_data.title)
                                                         .replace("[DEV_NAME]", &*extract_data.developer_name)
                                                         .replace("[MODULE_VERSION]", &*extract_data.module_version)
                                                         .replace("[PUBLICATION_DATE]", &*extract_data.publication_date)
                                                         .replace("[LAST_UPDATE]", &*extract_data.last_update)
-                                                        .replace("[PRESTASHOP_VERSION]", "ps_version")
-                                                        .replace("[AS_OVERRIDES]", "as_overrides")
+                                                        .replace("[PRESTASHOP_VERSION]", &*extract_data.ps_version_required)
+                                                        .replace("[AS_OVERRIDES]", &*extract_data.with_override)
                                                         .replace("[IS_MULTISTORE]", &*extract_data.multistore_compatibility)
                                                         .replace("[DESCRIPTION]", &*extract_data.description)
                                                         .replace("[CARACTERISTIQUES]", &*extract_data.caracteristiques)
-                                                        .replace("#URL_MODULE", "url_module")
-                                                        .replace("[IMG_TAGS]", "img");
+                                                        //.replace("#URL_MODULE", &body.solution.url)
+                                                        .replace("[IMG_TAGS]", &images_tags);
+
                                                     template_rendered = template_modified;
                                                 }
                                                 Err(e) => eprintln!("Failed to read template: {}", e),
                                             };
                                             let template_final = template_rendered.as_str();
 
-                                            match create_wordpress_page::create_wordpress_page(
+                                            match wp_create_page::create_wordpress_page(
                                                 name, // Using breadcrumb name for page title
                                                 template_final,
                                                 &*extract_data.product_id,
+                                                &body.solution.url,
                                                 status,
                                                 author,
                                                 wordpress_url,
@@ -204,7 +228,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                             }
                                                         }
                                                         Err(e) => {
-                                                            //eprintln!("Error creating page: {}", e.to_string());
+                                                            eprintln!("Error creating page 1: {}", e);
                                                             match serde_json::from_str::<serde_json::Value>(&e.to_string()) {
                                                                 Ok(json) => {
                                                                     if let Some(message) = json["message"].as_str() {
@@ -218,7 +242,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                     }
                                                 }
                                                 Err(e) => {
-                                                    //eprintln!("Error creating page: {}", e.to_string());
+                                                    eprintln!("Error creating page 2: {}", e);
                                                     match serde_json::from_str::<serde_json::Value>(&e.to_string()) {
                                                         Ok(json) => {
                                                             if let Some(message) = json["message"].as_str() {

@@ -1,20 +1,7 @@
 use std::collections::HashMap;
 
 use crate::config::config::FlareSolverrResponse;
-use crate::scraping::{
-    extract_breadcrumb,
-    extract_caracteristiques,
-    extract_description,
-    extract_developer_name,
-    extract_last_update,
-    extract_module_version,
-    extract_multistore_compatibility,
-    extract_override,
-    extract_price_ht,
-    extract_product_id,
-    extract_publication_date,
-    extract_title,
-};
+use crate::scraping::{extract_breadcrumb, extract_caracteristiques, extract_description, extract_developer_name, extract_image_urls, extract_last_update, extract_module_version, extract_multistore_compatibility, extract_override, extract_price_ht, extract_product_id, extract_ps_version_required, extract_publication_date, extract_title};
 
 #[derive(Debug)]
 pub struct ScrapedData {
@@ -31,6 +18,8 @@ pub struct ScrapedData {
     pub caracteristiques: String,
     pub with_override: String,
     pub description: String,
+    pub ps_version_required: String,
+    pub image_urls: Vec<String>,
 }
 
 // Extract data scraped from server flaresolverr
@@ -54,6 +43,12 @@ pub fn extract_data(body: &FlareSolverrResponse) -> ScrapedData {
     let caracteristiques = extract_caracteristiques::extract_caracteristiques(&body.solution.response);
     let with_override = extract_override::extract_override(&body.solution.response);
     let description = extract_description::extract_description(&body.solution.response);
+    let ps_version_required = extract_ps_version_required::extract_ps_version_required(&body.solution.response);
+
+    // Images
+    let base_url = "https://addons.prestashop.com/";
+    let image_urls = extract_image_urls::extract_image_urls(&body.solution.response, base_url);
+    println!("{:?}", image_urls);
 
     ScrapedData {
         breadcrumbs,
@@ -69,5 +64,7 @@ pub fn extract_data(body: &FlareSolverrResponse) -> ScrapedData {
         caracteristiques,
         with_override,
         description,
+        ps_version_required,
+        image_urls,
     }
 }

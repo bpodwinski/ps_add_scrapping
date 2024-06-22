@@ -1,13 +1,13 @@
 use scraper::{Html, Selector};
 use scraper::element_ref::ElementRef;
 
-pub fn extract_last_update(html_content: &str) -> String {
+pub fn extract_ps_version_required(html_content: &str) -> String {
     let document = Html::parse_document(html_content);
     let title_selector = Selector::parse("div.muik-section-item__title.puik-body-small").unwrap();
 
-    // Trouver le div spécifique contenant le texte 'Dernière mise à jour'
+    // Trouver le div spécifique contenant le texte 'Date de publication'
     if let Some(title_div) = document.select(&title_selector).find(|element| {
-        element.text().any(|text| text.contains("Dernière mise à jour"))
+        element.text().any(|text| text.contains("Version de PrestaShop requise"))
     }) {
         // Tenter de naviguer au prochain div qui contiendrait la date
         let mut next_node = title_div.next_sibling();
@@ -20,7 +20,7 @@ pub fn extract_last_update(html_content: &str) -> String {
         }
         println!("No valid following div found containing the date.");
     } else {
-        println!("No div containing 'Dernière mise à jour' title found.");
+        println!("No div containing 'Version de PrestaShop requise' title found.");
     }
 
     // Retourner une chaîne vide si aucune date valide n'est trouvée

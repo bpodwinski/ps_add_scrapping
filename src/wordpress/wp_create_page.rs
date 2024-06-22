@@ -6,15 +6,16 @@ use serde_json::json;
 /// Creates a WordPress page using the provided details.
 ///
 /// # Arguments
-/// * `title` - The title of the page to create.
-/// * `content` - The HTML content of the page.
-/// * `product_id` - The product ID to attach as meta-data.
-/// * `status` - The desired status of the page (e.g., 'draft', 'publish').
-/// * `author` - The author's user ID.
-/// * `wordpress_url` - The base URL of the WordPress site.
-/// * `username` - The username for WordPress API authentication.
-/// * `password` - The password for WordPress API authentication.
-/// * `parent` - The parent ID of the page to set hierarchy.
+/// * `title` - The title of the page to create
+/// * `content` - The HTML content of the page
+/// * `product_id` - The product ID to attach as meta-data
+/// * `product_url` - The product URL to attach as meta-data
+/// * `status` - Status of the page (publish, future, draft, pending, private)
+/// * `author` - The ID for the author of the post
+/// * `wordpress_url` - The base URL of the WordPress site
+/// * `username` - The username for WordPress API authentication
+/// * `password` - The password for WordPress API authentication
+/// * `parent` - The parent ID of the page to set hierarchy
 ///
 /// # Returns
 /// A result containing the body of the response as a string if successful, or an error if not.
@@ -22,6 +23,7 @@ pub async fn create_wordpress_page(
     title: &str,
     content: &str,
     product_id: &str,
+    product_url: &str,
     status: &str,
     author: i32,
     wordpress_url: &str,
@@ -41,7 +43,8 @@ pub async fn create_wordpress_page(
         "title": title,
         "content": content,
         "meta": {
-            "ps_product_id": product_id
+            "ps_product_id": product_id,
+            "ps_product_url": product_url
         },
         "status": status,
         "author": author,
@@ -61,13 +64,8 @@ pub async fn create_wordpress_page(
     let response_body = response.text().await.context("Failed to read response body")?;
 
     match status_code {
-        StatusCode::OK | StatusCode::CREATED => serde_json::from_str(&response_body)
-            .context("Failed to parse JSON response"),
-        StatusCode::BAD_REQUEST => {
-            let error = serde_json::from_str::<serde_json::Value>(&response_body)
-                .context("Failed to parse error JSON response")?;
-            Err(anyhow::anyhow!(response_body))
-        }
+        StatusCode::OK | StatusCode::CREATED => Ok(response_body),
+        StatusCode::BAD_REQUEST => Err(anyhow::anyhow!(response_body)),
         _ => Err(anyhow::anyhow!("Failed to create page with status {}: {}", status_code, response_body))
     }
 }

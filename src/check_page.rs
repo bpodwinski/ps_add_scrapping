@@ -1,4 +1,4 @@
-use crate::wordpress::check_page_exists;
+use crate::wordpress::wp_check_page;
 
 // Check if page already exist
 pub async fn check_page(
@@ -7,7 +7,7 @@ pub async fn check_page(
     password: &String,
     name: &String,
 ) -> bool {
-    let check_response = check_page_exists::check_page_exists(
+    let check_response = wp_check_page::check_page_exists(
         name,
         wordpress_url,
         username,

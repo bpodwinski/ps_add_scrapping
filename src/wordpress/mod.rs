@@ -1,2 +1,3 @@
-pub mod check_page_exists;
-pub mod create_wordpress_page;
+pub mod wp_check_page;
+pub mod wp_create_page;
+pub mod wp_upload_image;
