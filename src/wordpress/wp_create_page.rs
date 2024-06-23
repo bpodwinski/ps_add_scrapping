@@ -19,6 +19,7 @@ use serde_json::json;
 ///
 /// # Returns
 /// A result containing the body of the response as a string if successful, or an error if not.
+
 pub async fn create_wordpress_page(
     title: &str,
     content: &str,

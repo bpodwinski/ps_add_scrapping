@@ -8,17 +8,15 @@ use tokio;
 use tokio::fs::File as AsyncFile;
 use tokio::io::{AsyncReadExt, BufReader, BufWriter};
 
-// WordPress functionality
+use crate::utilities::check_page;
+use crate::utilities::extract_data;
+use crate::utilities::process_images;
 use crate::wordpress::wp_create_page;
-use crate::wordpress::wp_upload_image;
 
-// Import modules
 mod config;
 mod scraping;
 mod wordpress;
-//mod add_page;
-mod check_page;
-mod extract_data;
+mod utilities;
 
 #[derive(Deserialize, Serialize, Debug)]
 struct JsonResponse {
@@ -120,10 +118,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     let mut current_parent_id = config.wordpress_page.parent;
 
                                     // Create WordPress pages using hierarchy breadcrumbs extracted from scraped data
-                                    for breadcrumb in extract_data.breadcrumbs {
+                                    for breadcrumb in &extract_data.breadcrumbs {
                                         if let Some(name) = breadcrumb.get("name") {
                                             println!("Breadcrumb name: {}", name);
 
+                                            // Check if page already exists
                                             if check_page::check_page(
                                                 wordpress_url,
                                                 username,
@@ -131,47 +130,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 name,
                                             ).await { continue; }
 
+                                            // Upload image to WordPress and build template image
+                                            let images_tags = process_images::process_images(
+                                                wordpress_url,
+                                                username,
+                                                password,
+                                                &extract_data,
+                                            ).await;
+
                                             // Builds template for WordPress pages using data scraped
                                             let mut template_rendered = String::new();
-
-                                            // Images process
-                                            let mut formatted_strings = Vec::new();
-
-                                            for image_url in &*extract_data.image_urls {
-                                                println!("Uploading image from URL: {}", image_url);
-
-                                                match wp_upload_image::upload_image_wordpress(
-                                                    wordpress_url,
-                                                    username,
-                                                    password,
-                                                    image_url,
-                                                ).await {
-                                                    Ok(response) => {
-                                                        println!("Image uploaded successfully: {}", image_url);
-                                                        if let Ok(media_response) = response.json::<MediaResponse>().await {
-                                                            let formatted_string = format!("[fusion_image linktarget=\"_self\" image=\"{}\" image_id=\"{}|full\" /]", media_response.source_url, media_response.id);
-                                                            formatted_strings.push(formatted_string);
-                                                        } else {
-                                                            eprintln!("Failed to parse response as JSON: {}", image_url);
-                                                        }
-                                                    }
-                                                    Err(e) => {
-                                                        eprintln!("Failed to upload image: {}. Error: {}", image_url, e);
-                                                        continue;
-                                                    }
-                                                }
-                                            };
-
-                                            let mut content = String::from(r#"[fusion_images order_by="desc" picture_size="auto" hover_type="none" autoplay="no" flex_align_items="center" columns="3" column_spacing="5" show_nav="yes" mouse_scroll="no" border="no" lightbox="yes" caption_style="off" caption_title_tag="2" caption_align_medium="none" caption_align_small="none" caption_align="none" hide_on_mobile="small-visibility,medium-visibility,large-visibility"]"#);
-                                            let images_tags = formatted_strings.join("");
-                                            content.push_str(&images_tags);
-                                            content.push_str("\n[/fusion_images]");
-
                                             match read_template_from_config().await {
                                                 Ok(template) => {
-                                                    let template_modified = template
-                                                        //.replace("[NAME]", name)
-                                                        //.replace("[ID_PS_PRODUCT]", &*extract_data.product_id)
+                                                    let template_process = template
                                                         .replace("[PRICE_HT]", &*extract_data.price_ht)
                                                         .replace("[TITLE]", &*extract_data.title)
                                                         .replace("[DEV_NAME]", &*extract_data.developer_name)
@@ -183,10 +154,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                         .replace("[IS_MULTISTORE]", &*extract_data.multistore_compatibility)
                                                         .replace("[DESCRIPTION]", &*extract_data.description)
                                                         .replace("[CARACTERISTIQUES]", &*extract_data.caracteristiques)
-                                                        //.replace("#URL_MODULE", &body.solution.url)
                                                         .replace("[IMG_TAGS]", &images_tags);
 
-                                                    template_rendered = template_modified;
+                                                    template_rendered = template_process;
                                                 }
                                                 Err(e) => eprintln!("Failed to read template: {}", e),
                                             };

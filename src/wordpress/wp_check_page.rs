@@ -52,9 +52,10 @@ pub async fn check_page_exists(
         let pages: Vec<Value> = search_response
             .json()
             .await
-            .context("Failed to parse search response")?;
+            .context("Failed to parse search response as JSON")?;
 
-        let decoded_title = decode(title.as_bytes()).to_string()?;
+        let decoded_title = decode(title.as_bytes()).to_string()
+            .context("Failed to decode the title for comparison")?;
 
         if !pages.is_empty() {
             for page in pages {
@@ -68,9 +69,8 @@ pub async fn check_page_exists(
                         "page_id": page["id"],
                         "title": found_title
                     });
-                    let json_string = serde_json::to_string(&json_response).unwrap_or_else(|_| {
-                        "{\"error\": \"Failed to serialize JSON.\"}".to_string()
-                    });
+                    let json_string = serde_json::to_string(&json_response)
+                        .with_context(|| "Failed to serialize response JSON")?;
                     return Ok(Some(json_string));
                 }
             }
