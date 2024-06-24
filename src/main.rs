@@ -11,10 +11,10 @@ use tokio::io::{AsyncReadExt, BufReader, BufWriter};
 use crate::utilities::check_page;
 use crate::utilities::extract_data;
 use crate::utilities::process_images;
-use crate::wordpress::wp_create_page;
+use crate::wordpress::wp_create_page::WpCreatePageParams;
 
 mod config;
-mod scraping;
+mod extractors;
 mod wordpress;
 mod utilities;
 
@@ -153,7 +153,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                         .replace("[AS_OVERRIDES]", &*extract_data.with_override)
                                                         .replace("[IS_MULTISTORE]", &*extract_data.multistore_compatibility)
                                                         .replace("[DESCRIPTION]", &*extract_data.description)
-                                                        .replace("[CARACTERISTIQUES]", &*extract_data.caracteristiques)
+                                                        .replace("[CARACTERISTIQUES]", &*extract_data.features)
                                                         .replace("[IMG_TAGS]", &images_tags);
 
                                                     template_rendered = template_process;
@@ -162,18 +162,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             };
                                             let template_final = template_rendered.as_str();
 
-                                            match wp_create_page::create_wordpress_page(
-                                                name, // Using breadcrumb name for page title
-                                                template_final,
-                                                &*extract_data.product_id,
-                                                &body.solution.url,
-                                                status,
+                                            let params = WpCreatePageParams::new(
+                                                name.to_string(),
+                                                template_final.to_string(),
+                                                extract_data.product_id,
+                                                body.solution.url.to_string(),
+                                                status.to_string(),
                                                 author,
-                                                wordpress_url,
-                                                username,
-                                                password,
+                                                wordpress_url.to_string(),
+                                                username.to_string(),
+                                                password.to_string(),
                                                 current_parent_id,
-                                            ).await
+                                            );
+
+                                            match params.wp_create_page().await
                                             {
                                                 Ok(response) => {
                                                     // Processing the JSON response to extract the ID of the created page
@@ -187,7 +189,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                                 .and_then(|v| v.as_i64())
                                                             {
                                                                 // Set this ID as the parent ID for the next pages
-                                                                current_parent_id = id as i32;
+                                                                current_parent_id = id as u32;
                                                                 println!(
                                                                     "Updating parent_id for the next pages: {}",
                                                                     current_parent_id

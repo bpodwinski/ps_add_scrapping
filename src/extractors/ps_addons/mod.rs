@@ -1,5 +1,5 @@
 pub mod extract_breadcrumb;
-pub mod extract_caracteristiques;
+pub mod extract_features;
 pub mod extract_description;
 pub mod extract_developer_name;
 pub mod extract_last_update;
@@ -12,4 +12,3 @@ pub mod extract_publication_date;
 pub mod extract_title;
 pub mod extract_ps_version_required;
 pub mod extract_image_urls;
-

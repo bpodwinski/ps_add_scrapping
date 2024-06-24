@@ -1,31 +1,31 @@
-use crate::wordpress::wp_check_page;
+use crate::wordpress::wp_check_page::PageChecker;
 
 // Check if page already exist
 pub async fn check_page(
-    wordpress_url: &String,
-    username: &String,
-    password: &String,
-    name: &String,
+    wordpress_url: &str,
+    username: &str,
+    password: &str,
+    name: &str,
 ) -> bool {
-    let check_response = wp_check_page::check_page_exists(
-        name,
-        wordpress_url,
-        username,
-        password,
-    ).await;
+    let title = name.to_string();
+    let wordpress_url = wordpress_url.to_string();
+    let username = username.to_string();
+    let password = password.to_string();
 
-    match check_response {
-        Ok(Some(response)) => {
-            println!("Page already exists, response: {}", response);
+    let page_checker = PageChecker::new(title, wordpress_url, username, password);
+
+    match page_checker.wp_check_page().await {
+        Ok(Some(json_result)) => {
+            println!("Page found: {}", json_result);
             return true;
         }
         Ok(None) => {
-            println!("No existing page found, proceeding to create a new page");
+            println!("No matching page found.");
+            return false;
         }
         Err(e) => {
-            eprintln!("Error checking if page exists: {}", e);
+            println!("Error occurred: {}", e);
             return true;
         }
     }
-    false
 }

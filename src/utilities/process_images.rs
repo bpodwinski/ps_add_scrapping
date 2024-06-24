@@ -2,7 +2,13 @@ use crate::extract_data::ScrapedData;
 use crate::MediaResponse;
 use crate::wordpress::wp_upload_image;
 
-pub(crate) async fn process_images(wordpress_url: &String, username: &String, password: &String, extract_data: &ScrapedData) -> String {
+pub(crate) async fn process_images(
+    wordpress_url: &str,
+    username: &str,
+    password: &str,
+    extract_data:
+    &ScrapedData,
+) -> String {
     // Images process
     let mut formatted_strings = Vec::new();
 

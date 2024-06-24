@@ -1,6 +1,6 @@
 use scraper::{Html, Selector};
 
-pub fn extract_caracteristiques(html_content: &str) -> String {
+pub fn extract_features(html_content: &str) -> String {
     let document = Html::parse_document(html_content);
     let selector = Selector::parse("div.product-description__content").unwrap();
 

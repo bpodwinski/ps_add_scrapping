@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use crate::config::config::FlareSolverrResponse;
-use crate::scraping::{extract_breadcrumb, extract_caracteristiques, extract_description, extract_developer_name, extract_image_urls, extract_last_update, extract_module_version, extract_multistore_compatibility, extract_override, extract_price_ht, extract_product_id, extract_ps_version_required, extract_publication_date, extract_title};
+use crate::extractors::ps_addons::{extract_breadcrumb, extract_description, extract_developer_name, extract_features, extract_image_urls, extract_last_update, extract_module_version, extract_multistore_compatibility, extract_override, extract_price_ht, extract_product_id, extract_ps_version_required, extract_publication_date, extract_title};
 
 #[derive(Debug)]
 pub struct ScrapedData {
     pub breadcrumbs: Vec<HashMap<String, String>>,
-    pub product_id: String,
+    pub product_id: u32,
     pub price_ht: String,
     pub title: String,
     pub developer_name: String,
@@ -15,7 +15,7 @@ pub struct ScrapedData {
     pub last_update: String,
     pub multistore_compatibility: String,
     pub publication_date: String,
-    pub caracteristiques: String,
+    pub features: String,
     pub with_override: String,
     pub description: String,
     pub ps_version_required: String,
@@ -40,7 +40,7 @@ pub fn extract_data(body: &FlareSolverrResponse) -> ScrapedData {
     let last_update = extract_last_update::extract_last_update(&body.solution.response);
     let multistore_compatibility = extract_multistore_compatibility::extract_multistore_compatibility(&body.solution.response);
     let publication_date = extract_publication_date::extract_publication_date(&body.solution.response);
-    let caracteristiques = extract_caracteristiques::extract_caracteristiques(&body.solution.response);
+    let features = extract_features::extract_features(&body.solution.response);
     let with_override = extract_override::extract_override(&body.solution.response);
     let description = extract_description::extract_description(&body.solution.response);
     let ps_version_required = extract_ps_version_required::extract_ps_version_required(&body.solution.response);
@@ -61,7 +61,7 @@ pub fn extract_data(body: &FlareSolverrResponse) -> ScrapedData {
         last_update,
         multistore_compatibility,
         publication_date,
-        caracteristiques,
+        features,
         with_override,
         description,
         ps_version_required,

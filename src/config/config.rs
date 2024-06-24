@@ -50,8 +50,8 @@ pub struct WordPressApiConfig {
 pub struct WordPressPageConfig {
     pub template: String,
     pub status: String,
-    pub parent: i32,
-    pub author: i32,
+    pub parent: u32,
+    pub author: u32,
 }
 
 pub fn load_config() -> Result<AppConfig, ConfigError> {
