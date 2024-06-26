@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use crate::extract_data::ScrapedData;
 use crate::MediaResponse;
-use crate::wordpress::wp_upload_image;
+use crate::wordpress::main::{Auth, UploadImage};
 
 pub(crate) async fn process_images(
     wordpress_url: &str,
@@ -9,18 +11,13 @@ pub(crate) async fn process_images(
     extract_data:
     &ScrapedData,
 ) -> String {
-    // Images process
+    let wp = Arc::new(Auth::new(wordpress_url.to_string(), username.to_string(), password.to_string()));
     let mut formatted_strings = Vec::new();
 
     for image_url in &*extract_data.image_urls {
         println!("Uploading image from URL: {}", image_url);
 
-        match wp_upload_image::upload_image_wordpress(
-            wordpress_url,
-            username,
-            password,
-            image_url,
-        ).await {
+        match wp.upload_image(image_url).await {
             Ok(response) => {
                 println!("Image uploaded successfully: {}", image_url);
                 if let Ok(media_response) = response.json::<MediaResponse>().await {

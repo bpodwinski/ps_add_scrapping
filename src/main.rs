@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use colored::*;
 use csv_async::{AsyncReaderBuilder, AsyncWriterBuilder};
 use futures::stream::StreamExt;
@@ -8,15 +10,16 @@ use tokio;
 use tokio::fs::File as AsyncFile;
 use tokio::io::{AsyncReadExt, BufReader, BufWriter};
 
-use crate::utilities::check_page;
+use wordpress::main::{Auth, CreatePage, FindPage};
+
 use crate::utilities::extract_data;
 use crate::utilities::process_images;
-use crate::wordpress::wp_create_page::WpCreatePageParams;
 
 mod config;
 mod extractors;
-mod wordpress;
+
 mod utilities;
+mod wordpress;
 
 #[derive(Deserialize, Serialize, Debug)]
 struct JsonResponse {
@@ -57,6 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let status = &config.wordpress_page.status;
     let author = config.wordpress_page.author;
     let max_concurrency = config.base.max_concurrency;
+    let wp = Arc::new(Auth::new(wordpress_url.to_string(), username.to_string(), password.to_string()));
 
     // Setup CSV file reading
     let file = AsyncFile::open(&config.file.source_data).await?;
@@ -84,6 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let records_stream = csv_reader.records();
     records_stream
         .for_each_concurrent(max_concurrency, |record_result| {
+            let wp = wp.clone();
 
             // Clone client for async block usage
             let client = client.clone();
@@ -123,84 +128,85 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             println!("Breadcrumb name: {}", name);
 
                                             // Check if page already exists
-                                            if check_page::check_page(
-                                                wordpress_url,
-                                                username,
-                                                password,
-                                                name,
-                                            ).await { continue; }
-
-                                            // Upload image to WordPress and build template image
-                                            let images_tags = process_images::process_images(
-                                                wordpress_url,
-                                                username,
-                                                password,
-                                                &extract_data,
-                                            ).await;
-
-                                            // Builds template for WordPress pages using data scraped
-                                            let mut template_rendered = String::new();
-                                            match read_template_from_config().await {
-                                                Ok(template) => {
-                                                    let template_process = template
-                                                        .replace("[PRICE_HT]", &*extract_data.price_ht)
-                                                        .replace("[TITLE]", &*extract_data.title)
-                                                        .replace("[DEV_NAME]", &*extract_data.developer_name)
-                                                        .replace("[MODULE_VERSION]", &*extract_data.module_version)
-                                                        .replace("[PUBLICATION_DATE]", &*extract_data.publication_date)
-                                                        .replace("[LAST_UPDATE]", &*extract_data.last_update)
-                                                        .replace("[PRESTASHOP_VERSION]", &*extract_data.ps_version_required)
-                                                        .replace("[AS_OVERRIDES]", &*extract_data.with_override)
-                                                        .replace("[IS_MULTISTORE]", &*extract_data.multistore_compatibility)
-                                                        .replace("[DESCRIPTION]", &*extract_data.description)
-                                                        .replace("[CARACTERISTIQUES]", &*extract_data.features)
-                                                        .replace("[IMG_TAGS]", &images_tags);
-
-                                                    template_rendered = template_process;
+                                            match wp.find_page(name).await {
+                                                Ok(Some(json_result)) => {
+                                                    println!("Page found: {}", json_result);
                                                 }
-                                                Err(e) => eprintln!("Failed to read template: {}", e),
-                                            };
-                                            let template_final = template_rendered.as_str();
+                                                Ok(None) => {
+                                                    println!("Page does not exist. Creating one...");
 
-                                            let params = WpCreatePageParams::new(
-                                                name.to_string(),
-                                                template_final.to_string(),
-                                                extract_data.product_id,
-                                                body.solution.url.to_string(),
-                                                status.to_string(),
-                                                author,
-                                                wordpress_url.to_string(),
-                                                username.to_string(),
-                                                password.to_string(),
-                                                current_parent_id,
-                                            );
+                                                    // Upload image to WordPress and build template image
+                                                    let images_tags = process_images::process_images(
+                                                        wordpress_url,
+                                                        username,
+                                                        password,
+                                                        &extract_data,
+                                                    ).await;
 
-                                            match params.wp_create_page().await
-                                            {
-                                                Ok(response) => {
-                                                    // Processing the JSON response to extract the ID of the created page
-                                                    match serde_json::from_str::<serde_json::Value>(
-                                                        &response,
-                                                    ) {
-                                                        Ok(json_value) => {
-                                                            println!("Page created successfully");
-                                                            if let Some(id) = json_value
-                                                                .get("id")
-                                                                .and_then(|v| v.as_i64())
-                                                            {
-                                                                // Set this ID as the parent ID for the next pages
-                                                                current_parent_id = id as u32;
-                                                                println!(
-                                                                    "Updating parent_id for the next pages: {}",
-                                                                    current_parent_id
-                                                                );
-                                                            } else {
-                                                                eprintln!("{}", "Failed to extract parent_id from the response".red());
-                                                                continue;
+                                                    // Builds template for WordPress pages using data scraped
+                                                    let mut template_rendered = String::new();
+                                                    match read_template_from_config().await {
+                                                        Ok(template) => {
+                                                            let template_process = template
+                                                                .replace("[PRICE_HT]", &*extract_data.price_ht)
+                                                                .replace("[TITLE]", &*extract_data.title)
+                                                                .replace("[DEV_NAME]", &*extract_data.developer_name)
+                                                                .replace("[MODULE_VERSION]", &*extract_data.module_version)
+                                                                .replace("[PUBLICATION_DATE]", &*extract_data.publication_date)
+                                                                .replace("[LAST_UPDATE]", &*extract_data.last_update)
+                                                                .replace("[PRESTASHOP_VERSION]", &*extract_data.ps_version_required)
+                                                                .replace("[AS_OVERRIDES]", &*extract_data.with_override)
+                                                                .replace("[IS_MULTISTORE]", &*extract_data.multistore_compatibility)
+                                                                .replace("[DESCRIPTION]", &*extract_data.description)
+                                                                .replace("[CARACTERISTIQUES]", &*extract_data.features);
+                                                            //.replace("[IMG_TAGS]", &images_tags);
+
+                                                            template_rendered = template_process;
+                                                        }
+                                                        Err(e) => eprintln!("Failed to read template: {}", e),
+                                                    };
+                                                    let template_final = template_rendered.as_str();
+
+                                                    match wp.create_page(name, template_final, extract_data.product_id, &body.solution.url, status, author, current_parent_id).await
+                                                    {
+                                                        Ok(response) => {
+                                                            // Processing the JSON response to extract the ID of the created page
+                                                            match serde_json::from_str::<serde_json::Value>(
+                                                                &response,
+                                                            ) {
+                                                                Ok(json_value) => {
+                                                                    println!("Page created successfully");
+                                                                    if let Some(id) = json_value
+                                                                        .get("id")
+                                                                        .and_then(|v| v.as_i64())
+                                                                    {
+                                                                        // Set this ID as the parent ID for the next pages
+                                                                        current_parent_id = id as u32;
+                                                                        println!(
+                                                                            "Updating parent_id for the next pages: {}",
+                                                                            current_parent_id
+                                                                        );
+                                                                    } else {
+                                                                        eprintln!("{}", "Failed to extract parent_id from the response".red());
+                                                                        continue;
+                                                                    }
+                                                                }
+                                                                Err(e) => {
+                                                                    eprintln!("Error creating page 1: {}", e);
+                                                                    match serde_json::from_str::<serde_json::Value>(&e.to_string()) {
+                                                                        Ok(json) => {
+                                                                            if let Some(message) = json["message"].as_str() {
+                                                                                eprintln!("Detailed error: {}", message.red());
+                                                                            }
+                                                                        }
+                                                                        Err(_) => eprintln!("{}", "Failed to parse error information as JSON".red())
+                                                                    }
+                                                                    continue;
+                                                                }
                                                             }
                                                         }
                                                         Err(e) => {
-                                                            eprintln!("Error creating page 1: {}", e);
+                                                            eprintln!("Error creating page 2: {}", e);
                                                             match serde_json::from_str::<serde_json::Value>(&e.to_string()) {
                                                                 Ok(json) => {
                                                                     if let Some(message) = json["message"].as_str() {
@@ -212,20 +218,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                             continue;
                                                         }
                                                     }
+
+                                                    /*                                                    let creation_result = wp_auth.create_page(
+                                                                                                            page_title, content, product_id, product_url, status, author, parent,
+                                                                                                        ).await?;*/
+
+                                                    //println!("Page created successfully: {}", creation_result);
                                                 }
                                                 Err(e) => {
-                                                    eprintln!("Error creating page 2: {}", e);
-                                                    match serde_json::from_str::<serde_json::Value>(&e.to_string()) {
-                                                        Ok(json) => {
-                                                            if let Some(message) = json["message"].as_str() {
-                                                                eprintln!("Detailed error: {}", message.red());
-                                                            }
-                                                        }
-                                                        Err(_) => eprintln!("{}", "Failed to parse error information as JSON".red())
-                                                    }
-                                                    continue;
+                                                    println!("Error occurred: {}", e);
                                                 }
                                             }
+
+                                            //Ok(()).expect("TODO: panic message");
                                         }
                                     }
                                 } else {
