@@ -2,6 +2,9 @@ use anyhow::Result;
 use base64::{Engine, engine::general_purpose::STANDARD_NO_PAD};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use reqwest::Response;
+use serde_json::Value;
+
+use crate::wordpress::woocommerce::find_category_custom_ps_addons_cat_id::CategoryInfo;
 
 pub struct Auth {
     pub(crate) base_url: String,
@@ -49,7 +52,7 @@ pub trait CreateProduct {
         description: String,
         regular_price: String,
         categories: Vec<u32>,
-        images: Vec<String>,
+        images: &Vec<String>,
     ) -> Result<String>;
 }
 
@@ -59,6 +62,14 @@ pub trait CreatePage {
 
 pub trait FindPage {
     async fn find_page(&self, title: &str) -> Result<Option<String>>;
+}
+
+pub trait FindCategoryCustomPsAddonsCatId {
+    async fn find_category_custom_ps_addons_cat_id(&self, ps_addons_cat_id: u32) -> Result<CategoryInfo>;
+}
+
+pub trait CreateCategory {
+    async fn create_category(&self, name: String, parent: u32, ps_addons_cat_id: u32) -> Result<Value>;
 }
 
 pub trait UploadImage {

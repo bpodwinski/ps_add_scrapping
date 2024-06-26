@@ -14,6 +14,5 @@ pub fn extract_image_urls(html_content: &str, base_url: &str) -> Vec<String> {
             }
         }
     }
-
     images_url
 }

@@ -18,7 +18,6 @@ impl CreatePage for Auth {
         let client = Client::new();
         let headers = self.create_headers(None)?;
 
-
         let create_url = format!("{}/wp-json/wp/v2/pages", self.base_url);
 
         let page = json!({

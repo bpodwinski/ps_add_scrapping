@@ -16,7 +16,7 @@ impl CreateProduct for Auth {
         description: String,
         regular_price: String,
         categories: Vec<u32>,
-        images: Vec<String>,
+        images: &Vec<String>,
     ) -> Result<String> {
         let client = Client::new();
         let headers = self.create_headers(None)?;
@@ -27,7 +27,7 @@ impl CreateProduct for Auth {
             "name": name,
             "type": r#type,
             "status": status,
-            "r#virtual": r#virtual,
+            "virtual": r#virtual,
             "downloadable": downloadable,
             "short_description": short_description,
             "description": description,
@@ -44,6 +44,7 @@ impl CreateProduct for Auth {
             .await
             .context("Failed to send create product request")?;
 
+        // Save the status before consuming the response
         let status_code = response.status();
         let response_body = response.text().await.context("Failed to read response body")?;
 
