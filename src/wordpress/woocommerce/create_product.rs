@@ -17,6 +17,8 @@ impl CreateProduct for Auth {
         regular_price: String,
         categories: Vec<u32>,
         images: &Vec<String>,
+        ps_product_id: u32,
+        ps_product_url: String,
     ) -> Result<String> {
         let client = Client::new();
         let headers = self.create_headers(None)?;
@@ -33,7 +35,17 @@ impl CreateProduct for Auth {
             "description": description,
             "regular_price": regular_price,
             "categories": categories.iter().map(|&id| json!({ "id": id })).collect::<Vec<_>>(),
-            "images": images.iter().map(|url| json!({ "src": url })).collect::<Vec<_>>()
+            "images": images.iter().map(|url| json!({ "src": url })).collect::<Vec<_>>(),
+            "meta_data": [
+            {
+              "key": "ps_product_id",
+              "value": ps_product_id
+            },
+            {
+              "key": "ps_product_url",
+              "value": ps_product_url
+            }
+          ]
         });
 
         let response = client

@@ -53,6 +53,8 @@ pub trait CreateProduct {
         regular_price: String,
         categories: Vec<u32>,
         images: &Vec<String>,
+        ps_product_id: u32,
+        ps_product_url: String,
     ) -> Result<String>;
 }
 

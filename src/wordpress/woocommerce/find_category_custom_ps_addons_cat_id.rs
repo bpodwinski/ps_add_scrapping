@@ -47,7 +47,7 @@ impl FindCategoryCustomPsAddonsCatId for Auth {
                         });
                     }
                 }
-
+            } else {
                 return Ok(CategoryInfo {
                     status: "notfound".to_string(),
                     message: "No category found with the given ID".to_string(),

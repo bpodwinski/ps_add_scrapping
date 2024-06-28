@@ -74,3 +74,38 @@ add_filter('woocommerce_rest_product_cat_query', function ($query, $request) {
     }
     return $query;
 }, 10, 2);
+
+function authorize_custom_meta_rest_api() {
+    // Register custom fields for WooCommerce products
+    register_meta('product', 'ps_product_id', array(
+        'show_in_rest' => true,
+        'single' => true,
+        'type' => 'string',
+    ));
+
+    register_meta('product', 'ps_product_url', array(
+        'show_in_rest' => true,
+        'single' => true,
+        'type' => 'string',
+    ));
+}
+
+function add_meta_query_filter() {
+    // Add a query filter for WooCommerce products via REST API
+    add_filter('rest_product_query', function ($args, $request) {
+        $meta_key = $request->get_param('meta_key');
+        $meta_value = $request->get_param('meta_value');
+        if ($meta_key && $meta_value) {
+            $args['meta_query'] = array(
+                array(
+                    'key'   => $meta_key,
+                    'value' => $meta_value,
+                )
+            );
+        }
+        return $args;
+    }, 10, 2);
+}
+
+add_action('rest_api_init', 'add_meta_query_filter');
+add_action('init', 'authorize_custom_meta_rest_api');
