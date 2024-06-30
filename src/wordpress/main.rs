@@ -55,7 +55,7 @@ pub trait CreateProduct {
         images: &Vec<String>,
         ps_product_id: u32,
         ps_product_url: String,
-    ) -> Result<String>;
+    ) -> Result<Value>;
 }
 
 pub trait CreatePage {

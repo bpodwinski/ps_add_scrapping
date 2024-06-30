@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use reqwest::{Client, StatusCode};
-use serde_json::json;
+use serde::{Deserialize, Serialize};
+use serde_json::{from_str, json, Value};
 
 use crate::wordpress::main::{Auth, CreateProduct};
 
@@ -19,7 +20,7 @@ impl CreateProduct for Auth {
         images: &Vec<String>,
         ps_product_id: u32,
         ps_product_url: String,
-    ) -> Result<String> {
+    ) -> Result<Value> {
         let client = Client::new();
         let headers = self.create_headers(None)?;
 
@@ -60,9 +61,16 @@ impl CreateProduct for Auth {
         let status_code = response.status();
         let response_body = response.text().await.context("Failed to read response body")?;
 
+        let body_json: Result<Value, _> = from_str(&response_body);
+
+        let result = json!({
+            "http_status": status_code.as_u16(),
+            "body": body_json.unwrap_or(json!({"raw_body": response_body})),
+        });
+
         match status_code {
-            StatusCode::CREATED => Ok(response_body),
-            StatusCode::BAD_REQUEST => Err(anyhow::anyhow!(response_body)),
+            StatusCode::CREATED => Ok(result),
+            StatusCode::BAD_REQUEST => Ok(result),
             _ => Err(anyhow::anyhow!("Failed to create product with status {}: {}", status_code, response_body))
         }
     }
