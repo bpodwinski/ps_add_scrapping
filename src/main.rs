@@ -1,31 +1,28 @@
-use std::{env, fs};
-use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Result};
 use colored::*;
 use csv_async::{AsyncReaderBuilder, AsyncWriterBuilder};
 use futures::stream::StreamExt;
 use reqwest::Client;
-use rkv::{Manager, Rkv, StoreOptions, Value};
-use rkv::backend::{SafeMode, SafeModeEnvironment};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use tokio;
 use tokio::fs::File as AsyncFile;
 use tokio::io::{AsyncReadExt, BufReader, BufWriter};
-use tokio::sync::Mutex;
 
 use wordpress::main::{Auth, CreateCategory, CreatePage, FindCategoryCustomPsAddonsCatId, FindPage};
 
-use crate::utilities::{extract_data, extract_id_from_url};
+use crate::sitemap_update::sitemap_update;
+use crate::utilities::extract_data;
+use crate::utilities::init_sqlite::init_sqlite;
 use crate::wordpress::main::CreateProduct;
 
 mod config;
 mod extractors;
-
 mod utilities;
 mod wordpress;
+mod scrape_and_create_products;
+mod sitemap_update;
 
 #[derive(Deserialize, Serialize, Debug)]
 struct JsonResponse {
@@ -50,7 +47,7 @@ struct RenderedItem {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
-    // Load configuration settings
+    // Load configuration
     let config = match config::load_config() {
         Ok(cfg) => cfg,
         Err(e) => {
@@ -58,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err(e.into());
         }
     };
-
+    let config = Arc::new(config);
     let flaresolverr_url = &config.flaresolverr.flaresolverr_url;
     let wordpress_url = &config.wordpress_api.wordpress_url;
     let username = &config.wordpress_api.username_api;
@@ -68,14 +65,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let max_concurrency = config.base.max_concurrency;
     let wp = Arc::new(Auth::new(wordpress_url.to_string(), username.to_string(), password.to_string()));
 
-    let mut db_path = env::current_exe()?;
-    db_path.pop();
+    // Initialize SQLite
+    let conn = match init_sqlite() {
+        Ok(conn) => {
+            println!("{}", "Database initialized successfully".green());
+            conn
+        }
+        Err(e) => {
+            eprintln!("{}", format!("Failed to initialize database: {:?}", e).red());
+            return Err(e.into());
+        }
+    };
 
-    let mut manager = Manager::<SafeModeEnvironment>::singleton().write().unwrap();
-    let created_arc = manager.get_or_create(&*db_path, Rkv::new::<SafeMode>).unwrap();
-    let env = created_arc.read().unwrap();
-    let store = env.open_single("store_db", StoreOptions::create()).unwrap();
-    let env = Arc::new(Mutex::new(env));
+    // Sitemap update
+    sitemap_update(&conn, 7).await?;
 
     // Setup CSV file reading
     let file = AsyncFile::open(&config.file.source_data).await?;
@@ -101,168 +104,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Process records from the CSV file
     let client = Client::new();
 
-    let records_stream = csv_reader.records().enumerate();
-    records_stream.for_each_concurrent(max_concurrency, |(index, record_result)| {
-        let wp = wp.clone();
-        let client = client.clone();
-        let env = env.clone();
-
-        async move {
-            match record_result {
-                Ok(record) => {
-                    let url = record.get(0).unwrap_or_default();
-                    let data = json!({
-                            "cmd": "request.get",
-                            "url": url,
-                            "maxTimeout": 60000
-                        });
-
-                    // Send url csv at scrape to server flaresolverr
-                    let response: Result<reqwest::Response, reqwest::Error> = client
-                        .post(flaresolverr_url)
-                        .header(reqwest::header::CONTENT_TYPE, "application/json")
-                        .json(&data)
-                        .send()
-                        .await;
-
-                    if let Ok(resp) = response {
-                        if resp.status().is_success() {
-                            let body: Result<config::config::FlareSolverrResponse, reqwest::Error> = resp.json().await;
-
-                            if let Ok(body) = body {
-
-                                // Extract data scraped from server flaresolverr
-                                let extract_data = extract_data::extract_data(&body);
-
-                                let mut current_parent_id = config.wordpress_page.parent;
-
-                                // Create WooCommerce using hierarchy breadcrumbs extracted from scraped data
-                                let breadcrumbs = &extract_data.breadcrumbs;
-                                let last_breadcrumb_index = breadcrumbs.len() - 1;
-
-                                for (breadcrumb_index, breadcrumb) in breadcrumbs.iter().enumerate() {
-                                    if let Some(id) = breadcrumb.get("id") {
-                                        println!("Breadcrumb is: {}", id);
-
-                                        if breadcrumb_index == last_breadcrumb_index {
-                                            // Dernier breadcrumb est le produit
-                                            println!("Creating product ...");
-
-                                            let result = wp.create_product(
-                                                extract_data.title.to_string(),
-                                                "draft".to_string(),
-                                                "simple".to_string(),
-                                                true,
-                                                true,
-                                                extract_data.features.to_string(),
-                                                extract_data.description.to_string(),
-                                                extract_data.price_ht.to_string(),
-                                                vec![current_parent_id],
-                                                &extract_data.image_urls,
-                                                extract_data.product_id,
-                                                body.solution.url.to_string(),
-                                            ).await;
-
-                                            match result {
-                                                Ok(response) => {
-                                                    println!("Product creation response: {:?}", response);
-
-                                                    if let Some(http_status) = response["http_status"].as_u64() {
-                                                        let product_id = extract_data.product_id as u64;
-
-                                                        let mut env_guard = env.lock().await;
-                                                        let mut writer = env_guard.write().expect("Failed to create a writer");
-
-                                                        store.put(&mut writer, &format!("product_{}_id", &product_id), &Value::U64(product_id)).expect("Failed to put data");
-                                                        store.put(&mut writer, &format!("product_{}_http_code", &product_id), &Value::U64(http_status)).expect("Failed to put data");
-                                                        store.put(&mut writer, &format!("product_{}_date_modified", &product_id), &Value::Str(response["body"]["date_modified"].as_str().unwrap_or(""))).expect("Failed to put data");
-                                                        store.put(&mut writer, &format!("product_{}_ps_url", &product_id), &Value::Str(body.solution.url.as_str())).expect("Failed to put data");
-
-                                                        writer.commit().expect("Failed to commit transaction");
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    eprintln!("Error: {}", e);
-                                                    continue;
-                                                }
-                                            }
-                                        }
-
-                                        // todo: construire les categories et leurs enfants via le breadcrumb scrappé, vérifier si la catégorie existe, puis le dernier élément du breadcrumb sera le produit
-                                        let id_ps_category = extract_id_from_url::extract_id_from_url(id);
-                                        match wp.find_category_custom_ps_addons_cat_id(id_ps_category).await {
-                                            Ok(category_info) => {
-                                                match category_info.status.as_ref() {
-                                                    "found" => {
-                                                        println!("Category found: {:?}", category_info.category_name);
-                                                        if let Some(id) = category_info.category_id {
-                                                            current_parent_id = id
-                                                        }
-                                                        continue;
-                                                    }
-                                                    "notfound" => {
-                                                        println!("No category found with the given ID.");
-                                                        let name = breadcrumb.get("name").unwrap().to_string();
-
-                                                        match wp.create_category(name, current_parent_id, id_ps_category).await {
-                                                            Ok(response) => {
-                                                                println!("Category created successfully: {}", response);
-
-                                                                if let Some(id_category) = response
-                                                                    .get("id")
-                                                                    .and_then(|v| v.as_i64())
-                                                                {
-                                                                    current_parent_id = id_category as u32;
-                                                                    println!(
-                                                                        "Updating parent_id for next category: {}",
-                                                                        current_parent_id
-                                                                    );
-                                                                } else {
-                                                                    eprintln!("{}", "Failed to extract parent_id from the response".red());
-                                                                    continue;
-                                                                }
-                                                            }
-                                                            Err(e) => println!("Failed to create category: {}", e),
-                                                        }
-                                                    }
-                                                    _ => println!("Error: {}", category_info.message),
-                                                }
-                                            }
-                                            Err(e) => {
-                                                eprintln!("Failed to find category: {}", e);
-                                                // Ajoute ici la logique pour gérer l'erreur ou terminer la tâche
-                                            }
-                                        }
-                                    }
-                                }
-                            } else {
-                                eprintln!("Failed to deserialize response");
-                            }
-                        }
-                    } else {
-                        // todo: ajouter une logique pour gérer les erreurs de requête
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Failed to read CSV record: {}", e);
-                }
-            }
-        }
-    }).await;
-
+    scrape_and_create_products::scrape_and_create_products(config.clone(), &flaresolverr_url.to_string(), max_concurrency, wp, &mut csv_reader, client).await.expect("TODO: panic message");
     Ok(())
 }
 
 async fn read_template_from_config() -> Result<String, std::io::Error> {
-    // Load configuration settings
-    //let config = match config::load_config() {
-    //    Ok(cfg) => cfg,
-    //    Err(e) => {
-    //        eprintln!("Failed to load configuration: {}", e);
-    //        return Err(e.into());
-    //    }
-    //};
-
     // Tentez d'ouvrir le fichier et gérez l'erreur éventuelle
     let mut file = AsyncFile::open("template_page.txt").await?;
     let mut template = String::new();
