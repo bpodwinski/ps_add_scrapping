@@ -12,9 +12,9 @@ use tokio::io::{AsyncReadExt, BufReader, BufWriter};
 
 use wordpress::main::{Auth, CreateCategory, CreatePage, FindCategoryCustomPsAddonsCatId, FindPage};
 
-use crate::sitemap_update::sitemap_update;
+use crate::utilities::database;
 use crate::utilities::extract_data;
-use crate::utilities::init_sqlite::init_sqlite;
+use crate::utilities::sitemap;
 use crate::wordpress::main::CreateProduct;
 
 mod config;
@@ -22,7 +22,6 @@ mod extractors;
 mod utilities;
 mod wordpress;
 mod scrape_and_create_products;
-mod sitemap_update;
 
 #[derive(Deserialize, Serialize, Debug)]
 struct JsonResponse {
@@ -66,7 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let wp = Arc::new(Auth::new(wordpress_url.to_string(), username.to_string(), password.to_string()));
 
     // Initialize SQLite
-    let conn = match init_sqlite() {
+    let conn = match database::init_sqlite::init_sqlite() {
         Ok(conn) => {
             println!("{}", "Database initialized successfully".green());
             conn
@@ -78,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Sitemap update
-    sitemap_update(&conn, 7).await?;
+    sitemap::sitemap_update::sitemap_update(&conn, 7).await?;
 
     // Setup CSV file reading
     let file = AsyncFile::open(&config.file.source_data).await?;

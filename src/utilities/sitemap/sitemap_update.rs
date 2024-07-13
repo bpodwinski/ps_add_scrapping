@@ -3,9 +3,9 @@ use chrono::{Duration, Utc};
 use colored::Colorize;
 use rusqlite::Connection;
 
-use crate::utilities::get_sitemap_index_content::get_sitemap_index_content;
-use crate::utilities::get_sitemap_urls_content::get_sitemap_urls_content;
-use crate::utilities::insert_xml_into_sql::insert_xml_into_sql;
+use crate::utilities::database::insert_xml_into_sql::insert_xml_into_sql;
+use crate::utilities::sitemap::get_sitemap_index_content::get_sitemap_index_content;
+use crate::utilities::sitemap::get_sitemap_urls_content::get_sitemap_urls_content;
 
 pub async fn sitemap_update(
     conn: &Connection,
