@@ -1,7 +1,13 @@
+use std::sync::Arc;
+
 use anyhow::{Context, Result};
 use regex::Regex;
 use reqwest::Client;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
+
+use crate::config::get_configuration::get_configuration_value;
 
 #[derive(Serialize)]
 struct RequestPayload<'a> {
@@ -41,8 +47,9 @@ struct Solution {
 /// # Returns
 ///
 /// If successful, returns the content of the sitemap as a string.
-pub async fn get_sitemap_index_content(robots_url: &str) -> Result<String> {
-    let flaresolverr_url = "http://flare.solpheo.com/v1"; // TODO: use config variable for flaresolverr_url
+pub async fn get_sitemap_index_content(conn: Arc<Mutex<Connection>>, robots_url: &str) -> Result<String> {
+    let flaresolverr_url = get_configuration_value(conn.clone(), "flaresolverr_url").await?;
+    let user_agent = get_configuration_value(conn.clone(), "user_agent").await?;
 
     // Create an HTTP client
     let client = Client::new();
@@ -51,12 +58,12 @@ pub async fn get_sitemap_index_content(robots_url: &str) -> Result<String> {
     let robots_payload = RequestPayload {
         cmd: "request.get",
         url: robots_url,
-        user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36", // TODO: use config variable for user_agent
+        user_agent: &user_agent,
     };
 
     // Send the request via Flaresolverr for robots.txt
     let robots_response = client
-        .post(flaresolverr_url)
+        .post(&flaresolverr_url)
         .json(&robots_payload)
         .send()
         .await
@@ -88,7 +95,7 @@ pub async fn get_sitemap_index_content(robots_url: &str) -> Result<String> {
     let sitemap_payload = RequestPayload {
         cmd: "request.get",
         url: &sitemap_url,
-        user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36", // TODO: use config variable for user_agent
+        user_agent: &user_agent,
     };
 
     // Send the request via Flaresolverr for the sitemap

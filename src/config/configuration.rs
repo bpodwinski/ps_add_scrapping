@@ -1,15 +1,16 @@
 use std::fs;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use colored::Colorize;
-use rusqlite::params;
+use rusqlite::{Connection, params};
 use serde::Deserialize;
-
-use crate::utilities::database::init::Database;
+use tokio::sync::Mutex;
 
 #[derive(Deserialize)]
 struct Settings {
     base: Base,
+    prestashop_addon: PrestashopAddon,
     flaresolverr: Flaresolverr,
     wordpress_api: WordPressApi,
     wordpress_page: WordPressPage,
@@ -23,8 +24,15 @@ struct Base {
 }
 
 #[derive(Deserialize)]
+struct PrestashopAddon {
+    robots_url: String,
+    sitemap_lang: String,
+}
+
+#[derive(Deserialize)]
 struct Flaresolverr {
     flaresolverr_url: String,
+    user_agent: String,
 }
 
 #[derive(Deserialize)]
@@ -42,14 +50,15 @@ struct WordPressPage {
     author: i32,
 }
 
-pub fn load_configuration(db: &Database, file_path: &str) -> Result<()> {
+pub async fn load_configuration(db: &Arc<Mutex<Connection>>, file_path: &str) -> Result<()> {
+    let conn = db.lock().await;
+
     // Read the settings file
     let content = fs::read_to_string(file_path).context("Failed to read settings file")?;
 
     // Parse the settings file
     let settings: Settings = toml::from_str(&content).context("Failed to parse settings file")?;
 
-    let conn = db.conn.lock().unwrap();
     // Insert settings into the configuration table
     conn.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
@@ -65,7 +74,19 @@ pub fn load_configuration(db: &Database, file_path: &str) -> Result<()> {
     )?;
     conn.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
+        params!["robots_url", settings.prestashop_addon.robots_url],
+    )?;
+    conn.execute(
+        "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
+        params!["sitemap_lang", settings.prestashop_addon.sitemap_lang],
+    )?;
+    conn.execute(
+        "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["flaresolverr_url", settings.flaresolverr.flaresolverr_url],
+    )?;
+    conn.execute(
+        "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
+        params!["user_agent", settings.flaresolverr.user_agent],
     )?;
     conn.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",

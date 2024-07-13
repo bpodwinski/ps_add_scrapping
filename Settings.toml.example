@@ -3,12 +3,13 @@ name = "PS Add Scrapping"
 version = "1.0.0"
 max_concurrency = 10
 
-[file]
-source_data = "data.csv"
-processing_data = "data_updated.csv"
+[prestashop_addon]
+robots_url = "https://addons.prestashop.com/robots.txt"
+sitemap_lang = "fr"
 
 [flaresolverr]
 flaresolverr_url = "http://your_flare_proxy_url.com/v1"
+user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
 [wordpress_api]
 wordpress_url = "http://your_wordpress.com"

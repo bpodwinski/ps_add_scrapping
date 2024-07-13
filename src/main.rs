@@ -62,10 +62,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let wp = Arc::new(Auth::new(wordpress_url.to_string(), username.to_string(), password.to_string()));
 
     // Initialize SQLite
-    let conn = match database::init::init() {
-        Ok(conn) => {
+    let db = match database::init::init().await {
+        Ok(db) => {
             println!("{}", "Database initialized successfully".green());
-            conn
+            db
         }
         Err(e) => {
             eprintln!("{}", format!("Failed to initialize database: {:?}", e).red());
@@ -74,10 +74,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Load configuration
-    configuration::load_configuration(&conn, "Settings.toml")?;
+    if let Err(e) = configuration::load_configuration(&db.conn, "Settings.toml").await {
+        eprintln!("{}", format!("Failed to load configuration: {:?}", e).red());
+        return Err(e.into());
+    }
 
     // Update sitemap
-    sitemap::sitemap_update::sitemap_update(conn, 30).await?; // TODO: use config variable for flaresolverr_url
+    if let Err(e) = sitemap::sitemap_update::sitemap_update(&db.conn, 30).await {
+        eprintln!("{}", format!("Failed to update sitemap: {:?}", e).red());
+        return Err(e.into());
+    }
 
     //scrape_and_create_products::scrape_and_create_products(config.clone(), &flaresolverr_url.to_string(), max_concurrency, wp, &mut csv_reader, client).await.expect("TODO: panic message");
     Ok(())
