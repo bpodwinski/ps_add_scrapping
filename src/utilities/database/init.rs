@@ -1,7 +1,19 @@
 use std::env;
+use std::sync::{Arc, Mutex};
 
 use anyhow::Context;
 use rusqlite::Connection;
+
+#[derive(Clone)]
+pub struct Database {
+    pub conn: Arc<Mutex<Connection>>,
+}
+
+impl Database {
+    pub fn new(conn: Arc<Mutex<Connection>>) -> Self {
+        Self { conn }
+    }
+}
 
 /// Initializes the SQLite database.
 ///
@@ -24,7 +36,7 @@ use rusqlite::Connection;
 /// # Returns
 ///
 /// If successful, returns an open connection to the SQLite database.
-pub(crate) fn init_sqlite() -> anyhow::Result<Connection> {
+pub fn init() -> anyhow::Result<Database> {
     // Get the current executable path
     let mut db_path = env::current_exe().context("Failed to get current executable path")?;
 
@@ -62,5 +74,5 @@ pub(crate) fn init_sqlite() -> anyhow::Result<Connection> {
         ).context("Failed to create configuration table")?;
     }
 
-    Ok(conn)
+    Ok(Database::new(Arc::new(Mutex::new(conn))))
 }

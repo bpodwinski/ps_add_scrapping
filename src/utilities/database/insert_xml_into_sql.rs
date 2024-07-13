@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use anyhow::{Context, Result};
 use chrono::{DateTime, FixedOffset, Utc};
 use quick_xml::events::Event;
@@ -5,7 +7,9 @@ use quick_xml::Reader;
 use regex::Regex;
 use rusqlite::{Connection, params};
 
-pub fn insert_xml_into_sql(conn: &Connection, xml_content: &str) -> Result<()> {
+pub fn insert_xml_into_sql(conn: &Arc<Mutex<Connection>>, xml_content: &str) -> Result<()> {
+    let conn = conn.lock().unwrap();
+    
     let mut reader = Reader::from_str(xml_content);
     reader.config_mut().trim_text(true);
 

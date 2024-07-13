@@ -1,17 +1,14 @@
-use std::sync::Arc;
-
 use anyhow::{Context, Result};
 use colored::*;
-use csv_async::{AsyncReaderBuilder, AsyncWriterBuilder};
 use futures::stream::StreamExt;
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio;
 use tokio::fs::File as AsyncFile;
-use tokio::io::{AsyncReadExt, BufReader, BufWriter};
+use tokio::io::AsyncReadExt;
 
-use wordpress::main::{Auth, CreateCategory, CreatePage, FindCategoryCustomPsAddonsCatId, FindPage};
+use wordpress::main::{CreateCategory, CreatePage, FindCategoryCustomPsAddonsCatId, FindPage};
 
+use crate::config::configuration;
 use crate::utilities::database;
 use crate::utilities::extract_data;
 use crate::utilities::sitemap;
@@ -47,25 +44,25 @@ struct RenderedItem {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load configuration
-    let config = match config::load_config() {
-        Ok(cfg) => cfg,
-        Err(e) => {
-            eprintln!("Failed to load configuration: {}", e);
-            return Err(e.into());
-        }
-    };
-    let config = Arc::new(config);
-    let flaresolverr_url = &config.flaresolverr.flaresolverr_url;
-    let wordpress_url = &config.wordpress_api.wordpress_url;
-    let username = &config.wordpress_api.username_api;
-    let password = &config.wordpress_api.password_api;
-    let status = &config.wordpress_page.status;
-    let author = config.wordpress_page.author;
-    let max_concurrency = config.base.max_concurrency;
-    let wp = Arc::new(Auth::new(wordpress_url.to_string(), username.to_string(), password.to_string()));
+    // let config = match config::load_config() {
+    //     Ok(cfg) => cfg,
+    //     Err(e) => {
+    //         eprintln!("Failed to load configuration: {}", e);
+    //         return Err(e.into());
+    //     }
+    // };
+    // let config = Arc::new(config);
+    // let flaresolverr_url = &config.flaresolverr.flaresolverr_url;
+    // let wordpress_url = &config.wordpress_api.wordpress_url;
+    // let username = &config.wordpress_api.username_api;
+    // let password = &config.wordpress_api.password_api;
+    // let status = &config.wordpress_page.status;
+    // let author = config.wordpress_page.author;
+    // let max_concurrency = config.base.max_concurrency;
+    // let wp = Arc::new(Auth::new(wordpress_url.to_string(), username.to_string(), password.to_string()));
 
     // Initialize SQLite
-    let conn = match database::init_sqlite::init_sqlite() {
+    let conn = match database::init::init() {
         Ok(conn) => {
             println!("{}", "Database initialized successfully".green());
             conn
@@ -76,34 +73,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // Sitemap update
-    sitemap::sitemap_update::sitemap_update(&conn, 7).await?;
+    // Load configuration
+    configuration::load_configuration(&conn, "Settings.toml")?;
 
-    // Setup CSV file reading
-    let file = AsyncFile::open(&config.file.source_data).await?;
-    let reader = BufReader::new(file);
-    let mut csv_reader = AsyncReaderBuilder::new().create_reader(reader);
+    // Update sitemap
+    sitemap::sitemap_update::sitemap_update(conn, 30).await?; // TODO: use config variable for flaresolverr_url
 
-    // Read headers from CSV file
-    let headers = csv_reader.headers().await?;
-
-    // Setup CSV file writing
-    let file_out = AsyncFile::create(&config.file.processing_data).await?;
-    let writer = BufWriter::new(file_out);
-
-    let mut csv_writer = AsyncWriterBuilder::new()
-        .delimiter(b';')
-        .quote(b'"')
-        .double_quote(true)
-        .create_writer(writer);
-
-    // Write headers to the new CSV file
-    csv_writer.write_record(headers).await?;
-
-    // Process records from the CSV file
-    let client = Client::new();
-
-    scrape_and_create_products::scrape_and_create_products(config.clone(), &flaresolverr_url.to_string(), max_concurrency, wp, &mut csv_reader, client).await.expect("TODO: panic message");
+    //scrape_and_create_products::scrape_and_create_products(config.clone(), &flaresolverr_url.to_string(), max_concurrency, wp, &mut csv_reader, client).await.expect("TODO: panic message");
     Ok(())
 }
 
