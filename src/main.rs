@@ -5,10 +5,12 @@ use serde::{Deserialize, Serialize};
 use tokio;
 use tokio::fs::File as AsyncFile;
 use tokio::io::AsyncReadExt;
+use tokio::time::Instant;
 
 use wordpress::main::{CreateCategory, CreatePage, FindCategoryCustomPsAddonsCatId, FindPage};
 
 use crate::config::configuration;
+use crate::config::get_configuration::get_configuration_value_as_usize;
 use crate::utilities::database;
 use crate::utilities::extract_data;
 use crate::utilities::sitemap;
@@ -85,7 +87,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err(e.into());
     }
 
-    //scrape_and_create_products::scrape_and_create_products(config.clone(), &flaresolverr_url.to_string(), max_concurrency, wp, &mut csv_reader, client).await.expect("TODO: panic message");
+    // Process URLs in batches
+    let max_concurrency = get_configuration_value_as_usize(db.conn.clone(), "max_concurrency").await?;
+    // let wordpress_url = get_configuration_value(conn.clone(), "wordpress_url").await?;
+    // let username_api = get_configuration_value(conn.clone(), "username_api").await?;
+    // let password_api = get_configuration_value(conn.clone(), "password_api").await?;
+    // let wp = Arc::new(Auth::new(wordpress_url, username_api, password_api));
+
+    let start = Instant::now();
+    if let Err(e) = scrape_and_create_products::process_urls_dynamically(db.conn.clone(), 100, max_concurrency).await {
+        eprintln!("{}", format!("Failed to process URLs: {:?}", e).red());
+        return Err(e.into());
+    }
+
+    let duration = start.elapsed();
+    println!("{}", format!("Time taken to process URLs: {:?}", duration).green());
+
+    //scrape_and_create_products::scrape_and_create_products(conn.clone(), max_concurrency, wp, &mut csv_reader, client).await.expect("TODO: panic message for scrape_and_create_products function");
+
     Ok(())
 }
 

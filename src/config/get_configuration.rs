@@ -11,3 +11,10 @@ pub async fn get_configuration_value(conn: Arc<Mutex<Connection>>, key: &str) ->
         .context(format!("Failed to get configuration for key: {}", key))?;
     Ok(value)
 }
+
+pub async fn get_configuration_value_as_usize(conn: Arc<Mutex<Connection>>, key: &str) -> Result<usize> {
+    let value = get_configuration_value(conn, key).await?;
+    let parsed_value = value.parse::<usize>()
+        .context(format!("Failed to parse configuration value as usize for key: {}", key))?;
+    Ok(parsed_value)
+}

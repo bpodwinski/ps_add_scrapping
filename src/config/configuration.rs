@@ -10,6 +10,7 @@ use tokio::sync::Mutex;
 #[derive(Deserialize)]
 struct Settings {
     base: Base,
+    processing: Processing,
     prestashop_addon: PrestashopAddon,
     flaresolverr: Flaresolverr,
     wordpress_api: WordPressApi,
@@ -18,9 +19,14 @@ struct Settings {
 
 #[derive(Deserialize)]
 struct Base {
-    name: String,
-    version: String,
-    max_concurrency: i32,
+    app_name: String,
+    app_version: String,
+}
+
+#[derive(Deserialize)]
+struct Processing {
+    batch_size: u32,
+    max_concurrency: u32,
 }
 
 #[derive(Deserialize)]
@@ -46,8 +52,8 @@ struct WordPressApi {
 struct WordPressPage {
     template: String,
     status: String,
-    parent: i32,
-    author: i32,
+    parent: u32,
+    author: u32,
 }
 
 pub async fn load_configuration(db: &Arc<Mutex<Connection>>, file_path: &str) -> Result<()> {
@@ -62,15 +68,19 @@ pub async fn load_configuration(db: &Arc<Mutex<Connection>>, file_path: &str) ->
     // Insert settings into the configuration table
     conn.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
-        params!["base_name", settings.base.name],
+        params!["app_name", settings.base.app_name],
     )?;
     conn.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
-        params!["base_version", settings.base.version],
+        params!["app_version", settings.base.app_version],
     )?;
     conn.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
-        params!["base_max_concurrency", settings.base.max_concurrency.to_string()],
+        params!["batch_size", settings.processing.batch_size.to_string()],
+    )?;
+    conn.execute(
+        "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
+        params!["max_concurrency", settings.processing.max_concurrency.to_string()],
     )?;
     conn.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
