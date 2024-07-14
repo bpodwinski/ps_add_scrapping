@@ -18,3 +18,10 @@ pub async fn get_configuration_value_as_usize(conn: Arc<Mutex<Connection>>, key:
         .context(format!("Failed to parse configuration value as usize for key: {}", key))?;
     Ok(parsed_value)
 }
+
+pub async fn get_configuration_value_as_i64(conn: Arc<Mutex<Connection>>, key: &str) -> Result<i64> {
+    let value = get_configuration_value(conn, key).await?;
+    let parsed_value = value.parse::<i64>()
+        .context(format!("Failed to parse configuration value as i64 for key: {}", key))?;
+    Ok(parsed_value)
+}

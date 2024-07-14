@@ -1,14 +1,19 @@
 use std::sync::Arc;
 
-use anyhow::Result;
-use chrono::Utc;
+use anyhow::{Context, Result};
+use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use futures::{stream, StreamExt};
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
-use rusqlite::{Connection, params};
+use reqwest::Client;
+use rusqlite::{Connection, OptionalExtension, params};
+use serde_json::json;
 use tokio::sync::Mutex;
 use tokio::task;
 use tokio::time::{Duration, sleep};
+
+use crate::config::get_configuration::{get_configuration_value, get_configuration_value_as_i64};
+use crate::utilities::generate_random_delay::generate_random_delay;
 
 pub async fn get_urls_batch(
     conn: Arc<Mutex<Connection>>,
@@ -16,7 +21,7 @@ pub async fn get_urls_batch(
     limit: usize,
 ) -> Result<Vec<String>> {
     let conn = conn.lock().await;
-    let mut stmt = conn.prepare("SELECT url FROM urls LIMIT ?1 OFFSET ?2")?;
+    let mut stmt = conn.prepare("SELECT url FROM urls ORDER BY id LIMIT ?1 OFFSET ?2")?;
     let rows = stmt.query_map(params![limit, offset], |row| row.get(0))?;
 
     let mut urls = Vec::new();
@@ -64,20 +69,91 @@ async fn process_url(
     conn: Arc<Mutex<Connection>>,
     url: String,
 ) -> Result<()> {
+    let age_url = get_configuration_value_as_i64(conn.clone(), "age_url").await?;
 
-    // Use StdRng to generate a random delay
-    let mut rng = StdRng::from_entropy();
-    let delay = rng.gen_range(100..10001);
-    println!("Delay: {} milliseconds for URL: {}", delay, url);
+    // Checks when URL was last scraped, then doesn't process it if it was scraped recently
+    // If URL was scraped with an HTTP error (e.g., 403, 500), process URL
+    {
+        let conn = conn.lock().await;
+        let mut stmt = conn.prepare("SELECT date_modified, http_code FROM urls WHERE url = ?1")?;
+        let row = stmt.query_row([url.as_str()], |row| {
+            let date_modified: Option<String> = row.get(0)?;
+            let http_code: Option<i32> = row.get(1)?;
+            Ok((date_modified, http_code))
+        }).optional()?;
 
-    sleep(Duration::from_millis(delay)).await;
+        if let Some((date_modified, http_code)) = row {
 
-    // Update the date_modified field in the database
+            // Skip URL if it was modified less than `age_url` hours ago and http_code is 200
+            if let Some(date_modified) = date_modified {
+                let last_mod_date = DateTime::parse_from_rfc3339(&date_modified)?;
+                let now = Utc::now();
+                let last_mod_date_utc = last_mod_date.with_timezone(&Utc);
+                let hours_difference = (now - last_mod_date_utc).num_hours();
+
+                if hours_difference < age_url && http_code == Some(200) {
+                    println!("Skipping URL as it was modified less than {} hours ago: {}", age_url, url);
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    let client = Client::new();
+
+    let data = json!({
+            "cmd": "request.get",
+            "url": url,
+            "maxTimeout": 60000
+        });
+
+    // Send URL to scraping via FlareSolverr
+    let flaresolverr_url = get_configuration_value(conn.clone(), "flaresolverr_url").await?;
+
+    let response = client
+        .post(&flaresolverr_url)
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .json(&data)
+        .send()
+        .await
+        .context("Failed to send request to Flaresolverr")?;
+
+    let status = response.status();
+    let body = response.text().await.context("Failed to read response body")?;
+
+    // FlareSolverr scraping failed
+    if !status.is_success() {
+        eprintln!("Error: Status: {}, Body: {}", status, body);
+
+        // Update database
+        let http_code = status.as_u16();
+        let date_modified = Utc::now().to_rfc3339();
+
+        let conn = conn.lock().await;
+        conn.execute(
+            "UPDATE urls SET date_modified = ?1, http_code = ?2 WHERE url = ?3",
+            rusqlite::params![date_modified, http_code, url],
+        )?;
+
+        // Generate random delay
+        generate_random_delay(500, 6000).await;
+
+        return Err(anyhow::anyhow!("Failed to process URL due to FlareSolverr error"));
+    }
+
+    println!("Status: {}, Body: {}", status, body);
+
+    // Generate random delay
+    generate_random_delay(1000, 8000).await;
+
+    // Update database
     let date_modified = Utc::now().to_rfc3339();
+    let http_code = status.as_u16();
+
     let conn = conn.lock().await;
     conn.execute(
-        "UPDATE urls SET date_modified = ?1 WHERE url = ?2",
-        rusqlite::params![date_modified, url],
+        "UPDATE urls SET date_modified = ?1, http_code = ?2 WHERE url = ?3",
+        rusqlite::params![date_modified, http_code, url],
     )?;
 
     Ok(())

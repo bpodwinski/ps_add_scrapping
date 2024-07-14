@@ -27,6 +27,7 @@ struct Base {
 struct Processing {
     batch_size: u32,
     max_concurrency: u32,
+    age_url: u32,
 }
 
 #[derive(Deserialize)]
@@ -81,6 +82,10 @@ pub async fn load_configuration(db: &Arc<Mutex<Connection>>, file_path: &str) ->
     conn.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["max_concurrency", settings.processing.max_concurrency.to_string()],
+    )?;
+    conn.execute(
+        "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
+        params!["age_url", settings.processing.age_url.to_string()],
     )?;
     conn.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
