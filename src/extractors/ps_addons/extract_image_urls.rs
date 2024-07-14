@@ -10,7 +10,6 @@ pub fn extract_image_urls(html_content: &str, base_url: &str) -> Vec<String> {
         if let Some(src) = element.value().attr("src") {
             if src.contains(base_url) {
                 images_url.push(src.to_string());
-                println!("Link found in src: {}", src);
             }
         }
     }

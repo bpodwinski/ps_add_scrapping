@@ -132,7 +132,7 @@ pub async fn load_configuration(db: &Arc<Mutex<Connection>>, file_path: &str) ->
         params!["wordpress_author", settings.wordpress_page.author.to_string()],
     )?;
 
-    println!("{}", "Settings loaded and inserted into the database".green());
+    println!("{}", "Configurations loaded and added or updated into database".green());
 
     Ok(())
 }

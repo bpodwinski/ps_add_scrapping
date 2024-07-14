@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use reqwest::{Client, StatusCode};
-use serde::{Deserialize, Serialize};
 use serde_json::{from_str, json, Value};
 
 use crate::wordpress::main::{Auth, CreateProduct};

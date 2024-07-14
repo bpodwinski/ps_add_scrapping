@@ -1,7 +1,51 @@
 use std::collections::HashMap;
 
-use crate::config::config::FlareSolverrResponse;
-use crate::extractors::ps_addons::{extract_breadcrumb, extract_description, extract_developer_name, extract_features, extract_image_urls, extract_last_update, extract_module_version, extract_multistore_compatibility, extract_override, extract_price_ht, extract_product_id, extract_ps_version_required, extract_publication_date, extract_title};
+use serde::Deserialize;
+
+use crate::extractors::ps_addons::{
+    extract_breadcrumb,
+    extract_description,
+    extract_developer_name,
+    extract_features, extract_image_urls, extract_last_update, extract_module_version, extract_multistore_compatibility, extract_override, extract_price_ht, extract_product_id, extract_ps_version_required, extract_publication_date, extract_title};
+
+#[derive(Debug, Deserialize)]
+pub struct FlareSolverrResponse {
+    pub solution: Solution,
+    pub status: String,
+    pub message: String,
+    #[serde(rename = "startTimestamp")]
+    pub start_timestamp: u64,
+    #[serde(rename = "endTimestamp")]
+    pub end_timestamp: u64,
+    pub version: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Solution {
+    pub url: String,
+    pub status: u16,
+    pub headers: HashMap<String, String>,
+    pub response: String,
+    pub cookies: Vec<Cookie>,
+    #[serde(rename = "userAgent")]
+    pub user_agent: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Cookie {
+    pub name: Option<String>,
+    pub value: Option<String>,
+    pub domain: Option<String>,
+    pub path: Option<String>,
+    pub expires: Option<f64>,
+    pub size: Option<usize>,
+    #[serde(rename = "httpOnly")]
+    pub http_only: Option<bool>,
+    pub secure: Option<bool>,
+    pub session: Option<bool>,
+    #[serde(rename = "sameSite")]
+    pub same_site: Option<String>,
+}
 
 #[derive(Debug)]
 pub struct ScrapedData {
@@ -25,7 +69,7 @@ pub struct ScrapedData {
 // Extract data scraped from server flaresolverr
 pub fn extract_data(body: &FlareSolverrResponse) -> ScrapedData {
 
-    // Extract data scraped from server flaresolverr
+    // Extract data
     let ps_url = body.solution.url.clone();
     let title = extract_title::extract_title(&body.solution.response);
     let product_id =
@@ -45,10 +89,9 @@ pub fn extract_data(body: &FlareSolverrResponse) -> ScrapedData {
     let description = extract_description::extract_description(&body.solution.response);
     let ps_version_required = extract_ps_version_required::extract_ps_version_required(&body.solution.response);
 
-    // Images
+    // Extract urls images
     let base_url = "https://addons.prestashop.com/";
     let image_urls = extract_image_urls::extract_image_urls(&body.solution.response, base_url);
-    println!("{:?}", image_urls);
 
     ScrapedData {
         breadcrumbs,

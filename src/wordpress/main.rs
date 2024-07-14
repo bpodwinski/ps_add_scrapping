@@ -41,6 +41,27 @@ impl Auth {
 }
 
 pub trait CreateProduct {
+    /// Creates a product in WordPress WooCommerce using the provided details.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the product.
+    /// * `status` - The status of the product (e.g., "draft", "publish").
+    /// * `type` - The type of the product (e.g., "simple", "variable").
+    /// * `virtual` - Whether the product is virtual.
+    /// * `downloadable` - Whether the product is downloadable.
+    /// * `short_description` - A short description of the product.
+    /// * `description` - A detailed description of the product.
+    /// * `regular_price` - The regular price of the product.
+    /// * `categories` - A vector of category IDs to which the product belongs.
+    /// * `images` - A vector of image URLs for the product.
+    /// * `ps_product_id` - The PrestaShop product ID.
+    /// * `ps_product_url` - The PrestaShop product URL.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the response from the WordPress API as a `Value` on success,
+    /// or an error on failure.
     async fn create_product(
         &self,
         name: String,

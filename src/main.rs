@@ -1,20 +1,14 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use colored::*;
-use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio;
-use tokio::fs::File as AsyncFile;
-use tokio::io::AsyncReadExt;
 use tokio::time::Instant;
-
-use wordpress::main::{CreateCategory, CreatePage, FindCategoryCustomPsAddonsCatId, FindPage};
 
 use crate::config::configuration;
 use crate::config::get_configuration::get_configuration_value_as_usize;
 use crate::utilities::database;
 use crate::utilities::extract_data;
 use crate::utilities::sitemap;
-use crate::wordpress::main::CreateProduct;
 
 mod config;
 mod extractors;
@@ -45,24 +39,6 @@ struct RenderedItem {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
-    // Load configuration
-    // let config = match config::load_config() {
-    //     Ok(cfg) => cfg,
-    //     Err(e) => {
-    //         eprintln!("Failed to load configuration: {}", e);
-    //         return Err(e.into());
-    //     }
-    // };
-    // let config = Arc::new(config);
-    // let flaresolverr_url = &config.flaresolverr.flaresolverr_url;
-    // let wordpress_url = &config.wordpress_api.wordpress_url;
-    // let username = &config.wordpress_api.username_api;
-    // let password = &config.wordpress_api.password_api;
-    // let status = &config.wordpress_page.status;
-    // let author = config.wordpress_page.author;
-    // let max_concurrency = config.base.max_concurrency;
-    // let wp = Arc::new(Auth::new(wordpress_url.to_string(), username.to_string(), password.to_string()));
-
     // Initialize SQLite
     let db = match database::init::init().await {
         Ok(db) => {
@@ -88,6 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Process URLs in batches
+    let batch_size = get_configuration_value_as_usize(db.conn.clone(), "batch_size").await?;
     let max_concurrency = get_configuration_value_as_usize(db.conn.clone(), "max_concurrency").await?;
     // let wordpress_url = get_configuration_value(conn.clone(), "wordpress_url").await?;
     // let username_api = get_configuration_value(conn.clone(), "username_api").await?;
@@ -95,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let wp = Arc::new(Auth::new(wordpress_url, username_api, password_api));
 
     let start = Instant::now();
-    if let Err(e) = scrape_and_create_products::process_urls_dynamically(db.conn.clone(), 100, max_concurrency).await {
+    if let Err(e) = scrape_and_create_products::process_urls_dynamically(db.conn.clone(), batch_size, max_concurrency).await {
         eprintln!("{}", format!("Failed to process URLs: {:?}", e).red());
         return Err(e.into());
     }
@@ -103,16 +80,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let duration = start.elapsed();
     println!("{}", format!("Time taken to process URLs: {:?}", duration).green());
 
-    //scrape_and_create_products::scrape_and_create_products(conn.clone(), max_concurrency, wp, &mut csv_reader, client).await.expect("TODO: panic message for scrape_and_create_products function");
-
     Ok(())
-}
-
-async fn read_template_from_config() -> Result<String, std::io::Error> {
-    // Tentez d'ouvrir le fichier et gérez l'erreur éventuelle
-    let mut file = AsyncFile::open("template_page.txt").await?;
-    let mut template = String::new();
-    // Lisez le fichier dans la chaîne 'template' et gérez l'erreur éventuelle
-    file.read_to_string(&mut template).await?;
-    Ok(template)
 }

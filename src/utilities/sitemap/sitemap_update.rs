@@ -25,7 +25,7 @@ pub async fn sitemap_update(
         let duration = now.signed_duration_since(last_insert_date);
 
         if duration < Duration::days(days) {
-            println!("{}", format!("Last sitemap update was less than {} days ago. Skipping update", days).yellow());
+            println!("{}", format!("Last sitemap update was less than {} days ago", days).yellow());
             true
         } else {
             false
@@ -39,7 +39,7 @@ pub async fn sitemap_update(
         let sitemap_index_content = match get_sitemap_index_content(conn.clone(), &robots_url).await {
             Ok(content) => content,
             Err(e) => {
-                eprintln!("{}", format!("Failed to extract sitemap index URL and content: {:?}", e).red());
+                eprintln!("{}", format!("Failed to extract sitemap index data: {:?}", e).red());
                 return Err(e.into());
             }
         };
@@ -50,21 +50,21 @@ pub async fn sitemap_update(
                 content
             }
             Err(e) => {
-                eprintln!("{}", format!("Failed to fetch sitemap URL and content: {:?}", e).red());
+                eprintln!("{}", format!("Failed to fetch sitemap url data: {:?}", e).red());
                 return Err(e.into());
             }
         };
 
         // Insert sitemap urls into database
         match insert_xml_into_sql(&conn, &sitemap_urls_content).await {
-            Ok(_) => println!("{}", "Successfully inserted data into the database.".green()),
+            Ok(_) => println!("{}", "Added sitemap data successfully into database".green()),
             Err(e) => {
-                eprintln!("{}", format!("Failed to insert sitemap URLs into database: {:?}", e).red());
+                eprintln!("{}", format!("Failed to added sitemap data into database: {:?}", e).red());
                 return Err(e.into());
             }
         }
     } else {
-        println!("{}", "Skipping the XML insertion process.".yellow());
+        println!("{}", "Skipping update sitemap".yellow());
     }
 
     Ok(())
