@@ -7,7 +7,6 @@ use tokio::time::Instant;
 use crate::config::configuration;
 use crate::config::get_configuration::{get_configuration_value_as_i64, get_configuration_value_as_usize};
 use crate::utilities::database;
-use crate::utilities::extract_data;
 use crate::utilities::sitemap;
 
 mod config;
@@ -66,18 +65,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err(e.into());
     }
 
-    // Process URLs in batches
+    // Process URLs
     let batch_size = get_configuration_value_as_usize(&db, "batch_size").await?;
     let max_concurrency = get_configuration_value_as_usize(&db, "max_concurrency").await?;
 
     let start = Instant::now();
+
     if let Err(e) = process::process_urls_dynamically(&db, batch_size, max_concurrency).await {
         eprintln!("{}", format!("Failed to process URLs: {:?}", e).red());
         return Err(e.into());
     }
 
     let duration = start.elapsed();
-    println!("{}", format!("Time taken to process URLs: {:?}", duration).green());
+    println!("{}", format!("Time to process URLs: {:?}", duration).green());
 
     Ok(())
 }

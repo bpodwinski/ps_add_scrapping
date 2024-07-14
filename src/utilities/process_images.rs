@@ -4,7 +4,7 @@ use crate::extract_data::ScrapedData;
 use crate::MediaResponse;
 use crate::wordpress::main::{Auth, UploadImage};
 
-pub(crate) async fn process_images(
+pub async fn process_images(
     wordpress_url: &str,
     username: &str,
     password: &str,

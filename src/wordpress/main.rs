@@ -1,7 +1,6 @@
 use anyhow::Result;
 use base64::{Engine, engine::general_purpose::STANDARD_NO_PAD};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
-use reqwest::Response;
 use serde_json::Value;
 
 use crate::wordpress::woocommerce::find_category_custom_ps_addons_cat_id::CategoryInfo;
@@ -79,13 +78,13 @@ pub trait CreateProduct {
     ) -> Result<Value>;
 }
 
-pub trait CreatePage {
-    async fn create_page(&self, title: &str, content: &str, product_id: u32, product_url: &str, status: &str, author: u32, parent: u32) -> Result<String>;
-}
+// pub trait CreatePage {
+//     async fn create_page(&self, title: &str, content: &str, product_id: u32, product_url: &str, status: &str, author: u32, parent: u32) -> Result<String>;
+// }
 
-pub trait FindPage {
-    async fn find_page(&self, title: &str) -> Result<Option<String>>;
-}
+// pub trait FindPage {
+//     async fn find_page(&self, title: &str) -> Result<Option<String>>;
+// }
 
 pub trait FindCategoryCustomPsAddonsCatId {
     /// Implementation of the `FindCategoryCustomPsAddonsCatId` trait for the `Auth` struct.
@@ -142,6 +141,6 @@ pub trait CreateCategory {
     async fn create_category(&self, name: String, parent: u32, ps_addons_cat_id: u32) -> Result<Value>;
 }
 
-pub trait UploadImage {
-    async fn upload_image(&self, image_url: &str) -> Result<Response>;
-}
+// pub trait UploadImage {
+//     async fn upload_image(&self, image_url: &str) -> Result<Response>;
+// }
