@@ -88,6 +88,28 @@ pub trait FindPage {
 }
 
 pub trait FindCategoryCustomPsAddonsCatId {
+    /// Implementation of the `FindCategoryCustomPsAddonsCatId` trait for the `Auth` struct.
+    ///
+    /// This function sends a request to the WordPress WooCommerce API to search for a product category
+    /// with the provided PrestaShop addons category ID. It constructs the necessary API URL, makes the HTTP request,
+    /// and handles the response to determine if the category exists.
+    ///
+    /// # Arguments
+    ///
+    /// * `ps_addons_cat_id` - The PrestaShop addons category ID to search for.
+    ///
+    /// # Returns
+    ///
+    /// If successful, returns a `CategoryInfo` struct containing the status, message, and category details
+    /// if the category is found.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if any of the following operations fail:
+    ///
+    /// - Constructing the HTTP headers.
+    /// - Sending the HTTP request.
+    /// - Parsing the response body as JSON.
     async fn find_category_custom_ps_addons_cat_id(&self, ps_addons_cat_id: u32) -> Result<CategoryInfo>;
 }
 

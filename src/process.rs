@@ -173,6 +173,7 @@ async fn process_url(
             // Create or update category
             let id_ps_category = extract_id_from_url::extract_id_from_url(id);
 
+            // Check if category exists in WooCommerce
             match wp.find_category_custom_ps_addons_cat_id(id_ps_category).await {
                 Ok(category_info) => {
                     match category_info.status.as_ref() {
