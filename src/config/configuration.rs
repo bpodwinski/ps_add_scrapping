@@ -34,6 +34,7 @@ struct Processing {
 struct PrestashopAddon {
     robots_url: String,
     sitemap_lang: String,
+    sitemap_frequency_update: u32,
 }
 
 #[derive(Deserialize)]
@@ -58,7 +59,7 @@ struct WordPressPage {
 }
 
 pub async fn load_configuration(db: &Arc<Mutex<Connection>>, file_path: &str) -> Result<()> {
-    let conn = db.lock().await;
+    let db = db.lock().await;
 
     // Read the settings file
     let content = fs::read_to_string(file_path).context("Failed to read settings file")?;
@@ -67,67 +68,71 @@ pub async fn load_configuration(db: &Arc<Mutex<Connection>>, file_path: &str) ->
     let settings: Settings = toml::from_str(&content).context("Failed to parse settings file")?;
 
     // Insert settings into the configuration table
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["app_name", settings.base.app_name],
     )?;
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["app_version", settings.base.app_version],
     )?;
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["batch_size", settings.processing.batch_size.to_string()],
     )?;
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["max_concurrency", settings.processing.max_concurrency.to_string()],
     )?;
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["age_url", settings.processing.age_url.to_string()],
     )?;
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["robots_url", settings.prestashop_addon.robots_url],
     )?;
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["sitemap_lang", settings.prestashop_addon.sitemap_lang],
     )?;
-    conn.execute(
+    db.execute(
+        "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
+        params!["sitemap_frequency_update", settings.prestashop_addon.sitemap_frequency_update.to_string()],
+    )?;
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["flaresolverr_url", settings.flaresolverr.flaresolverr_url],
     )?;
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["user_agent", settings.flaresolverr.user_agent],
     )?;
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["wordpress_url", settings.wordpress_api.wordpress_url],
     )?;
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["username_api", settings.wordpress_api.username_api],
     )?;
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["password_api", settings.wordpress_api.password_api],
     )?;
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["wordpress_template", settings.wordpress_page.template],
     )?;
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["wordpress_status", settings.wordpress_page.status],
     )?;
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["wordpress_parent", settings.wordpress_page.parent.to_string()],
     )?;
-    conn.execute(
+    db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
         params!["wordpress_author", settings.wordpress_page.author.to_string()],
     )?;

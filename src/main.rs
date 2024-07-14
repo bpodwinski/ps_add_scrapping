@@ -5,7 +5,7 @@ use tokio;
 use tokio::time::Instant;
 
 use crate::config::configuration;
-use crate::config::get_configuration::get_configuration_value_as_usize;
+use crate::config::get_configuration::{get_configuration_value_as_i64, get_configuration_value_as_usize};
 use crate::utilities::database;
 use crate::utilities::extract_data;
 use crate::utilities::sitemap;
@@ -14,7 +14,7 @@ mod config;
 mod extractors;
 mod utilities;
 mod wordpress;
-mod scrape_and_create_products;
+mod process;
 
 #[derive(Deserialize, Serialize, Debug)]
 struct JsonResponse {
@@ -40,7 +40,7 @@ struct RenderedItem {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize SQLite
-    let db = match database::init::init().await {
+    let db_init = match database::init::init().await {
         Ok(db) => {
             println!("{}", "Database initialized successfully".green());
             db
@@ -50,29 +50,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err(e.into());
         }
     };
+    let db = &db_init.conn;
 
     // Load configuration
-    if let Err(e) = configuration::load_configuration(&db.conn, "Settings.toml").await {
+    if let Err(e) = configuration::load_configuration(&db, "Settings.toml").await {
         eprintln!("{}", format!("Failed to load configuration: {:?}", e).red());
         return Err(e.into());
     }
 
     // Update sitemap
-    if let Err(e) = sitemap::sitemap_update::sitemap_update(&db.conn, 30).await {
+    let sitemap_frequency_update = get_configuration_value_as_i64(&db, "sitemap_frequency_update").await?;
+
+    if let Err(e) = sitemap::sitemap_update::sitemap_update(&db, sitemap_frequency_update).await {
         eprintln!("{}", format!("Failed to update sitemap: {:?}", e).red());
         return Err(e.into());
     }
 
     // Process URLs in batches
-    let batch_size = get_configuration_value_as_usize(db.conn.clone(), "batch_size").await?;
-    let max_concurrency = get_configuration_value_as_usize(db.conn.clone(), "max_concurrency").await?;
-    // let wordpress_url = get_configuration_value(conn.clone(), "wordpress_url").await?;
-    // let username_api = get_configuration_value(conn.clone(), "username_api").await?;
-    // let password_api = get_configuration_value(conn.clone(), "password_api").await?;
-    // let wp = Arc::new(Auth::new(wordpress_url, username_api, password_api));
+    let batch_size = get_configuration_value_as_usize(&db, "batch_size").await?;
+    let max_concurrency = get_configuration_value_as_usize(&db, "max_concurrency").await?;
 
     let start = Instant::now();
-    if let Err(e) = scrape_and_create_products::process_urls_dynamically(db.conn.clone(), batch_size, max_concurrency).await {
+    if let Err(e) = process::process_urls_dynamically(&db, batch_size, max_concurrency).await {
         eprintln!("{}", format!("Failed to process URLs: {:?}", e).red());
         return Err(e.into());
     }

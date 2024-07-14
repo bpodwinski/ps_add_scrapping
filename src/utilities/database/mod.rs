@@ -1,2 +1,2 @@
 pub mod init;
-pub mod insert_xml_into_sql;
+pub mod insert_sitemap_into_sql;

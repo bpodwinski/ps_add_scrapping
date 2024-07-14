@@ -92,6 +92,31 @@ pub trait FindCategoryCustomPsAddonsCatId {
 }
 
 pub trait CreateCategory {
+    /// Implementation of the `CreateCategory` trait for the `Auth` struct.
+    ///
+    /// This function sends a request to the WordPress WooCommerce API to create a new product category
+    /// with the provided details. It constructs the necessary JSON payload, makes the HTTP request,
+    /// and handles the response.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the category to be created.
+    /// * `parent` - The ID of the parent category.
+    /// * `ps_addons_cat_id` - The ID of the PrestaShop category.
+    ///
+    /// # Returns
+    ///
+    /// If successful, returns the response from the WordPress API as a `Value` on success,
+    /// or an error on failure.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if any of the following operations fail:
+    ///
+    /// - Constructing the HTTP headers.
+    /// - Sending the HTTP request.
+    /// - Reading the response body.
+    /// - Parsing the response body as JSON.
     async fn create_category(&self, name: String, parent: u32, ps_addons_cat_id: u32) -> Result<Value>;
 }
 

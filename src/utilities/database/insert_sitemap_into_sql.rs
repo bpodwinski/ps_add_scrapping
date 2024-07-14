@@ -8,8 +8,11 @@ use regex::Regex;
 use rusqlite::{Connection, params};
 use tokio::sync::Mutex;
 
-pub async fn insert_xml_into_sql(conn: &Arc<Mutex<Connection>>, xml_content: &str) -> Result<()> {
-    let conn = conn.lock().await;
+pub async fn insert_sitemap_into_sql(
+    db: &Arc<Mutex<Connection>>,
+    xml_content: &str,
+) -> Result<()> {
+    let db = db.lock().await;
 
     let mut reader = Reader::from_str(xml_content);
     reader.config_mut().trim_text(true);
@@ -82,7 +85,7 @@ pub async fn insert_xml_into_sql(conn: &Arc<Mutex<Connection>>, xml_content: &st
                     }
 
                     // Insert or update the data
-                    conn.execute(
+                    db.execute(
                         "INSERT INTO urls (url, last_mod, change_freq) VALUES (?1, ?2, ?3)
                         ON CONFLICT(url) DO UPDATE SET last_mod = excluded.last_mod, change_freq = excluded.change_freq",
                         params![url, last_mod, change_freq],
@@ -98,7 +101,7 @@ pub async fn insert_xml_into_sql(conn: &Arc<Mutex<Connection>>, xml_content: &st
 
     // Insert the current date and time into the configuration table
     let current_date = Utc::now().to_rfc3339();
-    conn.execute(
+    db.execute(
         "INSERT INTO configuration (key, value) VALUES ('last_sitemap_insert_date', ?1)
         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         params![current_date],

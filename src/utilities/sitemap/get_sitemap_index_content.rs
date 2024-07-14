@@ -47,9 +47,12 @@ struct Solution {
 /// # Returns
 ///
 /// If successful, returns the content of the sitemap as a string.
-pub async fn get_sitemap_index_content(conn: Arc<Mutex<Connection>>, robots_url: &str) -> Result<String> {
-    let flaresolverr_url = get_configuration_value(conn.clone(), "flaresolverr_url").await?;
-    let user_agent = get_configuration_value(conn.clone(), "user_agent").await?;
+pub async fn get_sitemap_index_content(
+    db: &Arc<Mutex<Connection>>,
+    robots_url: &str,
+) -> Result<String> {
+    let flaresolverr_url = get_configuration_value(db, "flaresolverr_url").await?;
+    let user_agent = get_configuration_value(db, "user_agent").await?;
 
     // Create an HTTP client
     let client = Client::new();
@@ -76,8 +79,10 @@ pub async fn get_sitemap_index_content(conn: Arc<Mutex<Connection>>, robots_url:
 
     let robots_body = robots_response_payload.solution.response;
 
+    // Extract content from <pre> tags
     let pre_content = extract_pre_content(&robots_body).context("Failed to extract content from <pre> tags")?;
 
+    // Regex to find the sitemap URL
     let re = Regex::new(r"(?im)^Sitemap:\s*(?P<url>https?://\S+)$")
         .context("Failed to compile regex")?;
 
@@ -100,7 +105,7 @@ pub async fn get_sitemap_index_content(conn: Arc<Mutex<Connection>>, robots_url:
 
     // Send the request via Flaresolverr for the sitemap
     let sitemap_response = client
-        .post(flaresolverr_url)
+        .post(&flaresolverr_url)
         .json(&sitemap_payload)
         .send()
         .await

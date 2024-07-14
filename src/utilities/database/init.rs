@@ -50,14 +50,14 @@ pub async fn init() -> anyhow::Result<Database> {
 
     // Open a connection to the SQLite database
     let conn = Connection::open(&db_path).context("Failed to open SQLite database")?;
-    let conn = Arc::new(Mutex::new(conn));
+    let db = Arc::new(Mutex::new(conn));
 
     // Create the "urls" table if the database file didn't exist before
     {
-        let conn = conn.lock().await;
+        let db = db.lock().await;
         // Create the "urls" table if the database file didn't exist before
         if !db_exists {
-            conn.execute(
+            db.execute(
                 "CREATE TABLE IF NOT EXISTS urls (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     url TEXT NOT NULL UNIQUE,
@@ -69,7 +69,7 @@ pub async fn init() -> anyhow::Result<Database> {
                 [],
             ).context("Failed to create urls table")?;
 
-            conn.execute(
+            db.execute(
                 "CREATE TABLE IF NOT EXISTS configuration (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     key TEXT NOT NULL UNIQUE,
@@ -80,5 +80,5 @@ pub async fn init() -> anyhow::Result<Database> {
         }
     }
 
-    Ok(Database::new(conn))
+    Ok(Database::new(db))
 }

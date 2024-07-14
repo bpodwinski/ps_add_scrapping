@@ -46,9 +46,13 @@ struct Solution {
 /// # Returns
 ///
 /// If successful, returns the cleaned XML content as a `String`.
-pub async fn get_sitemap_urls_content(conn: Arc<Mutex<Connection>>, sitemap_index_content: &str, sitemap_lang: &str) -> Result<String> {
-    let flaresolverr_url = get_configuration_value(conn.clone(), "flaresolverr_url").await?;
-    let user_agent = get_configuration_value(conn.clone(), "user_agent").await?;
+pub async fn get_sitemap_urls_content(
+    db: &Arc<Mutex<Connection>>,
+    sitemap_index_content: &str,
+    sitemap_lang: &str,
+) -> Result<String> {
+    let flaresolverr_url = get_configuration_value(db, "flaresolverr_url").await?;
+    let user_agent = get_configuration_value(db, "user_agent").await?;
 
     // Create an HTTP client
     let client = Client::new();

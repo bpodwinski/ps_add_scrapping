@@ -19,7 +19,7 @@ use crate::wordpress::main::{Auth, CreateCategory, CreateProduct, FindCategoryCu
 ///
 /// # Arguments
 ///
-/// * `conn` - A shared, locked database connection.
+/// * `db` - A shared, locked database connection.
 /// * `batch_size` - The number of URLs to fetch in each batch.
 /// * `max_concurrent_tasks` - The maximum number of concurrent tasks.
 ///
@@ -27,14 +27,14 @@ use crate::wordpress::main::{Auth, CreateCategory, CreateProduct, FindCategoryCu
 ///
 /// `Ok(())` if all URLs are processed successfully, or an error if any task fails.
 pub async fn process_urls_dynamically(
-    conn: Arc<Mutex<Connection>>,
+    db: &Arc<Mutex<Connection>>,
     batch_size: usize,
     max_concurrent_tasks: usize,
 ) -> Result<()> {
     let mut offset = 0;
 
     loop {
-        let urls = get_urls_batch(conn.clone(), offset, batch_size).await?;
+        let urls = get_urls_batch(db, offset, batch_size).await?;
 
         if urls.is_empty() {
             break;
@@ -42,9 +42,9 @@ pub async fn process_urls_dynamically(
 
         // Create a stream to process the URLs in parallel
         let tasks = stream::iter(urls.into_iter().map(|url| {
-            let conn = conn.clone();
+            let db = Arc::clone(db);
             task::spawn(async move {
-                if let Err(e) = process_url(conn, url).await {
+                if let Err(e) = process_url(&db, url).await {
                     eprintln!("Failed to process URL: {:?}", e);
                 }
             })
@@ -63,7 +63,7 @@ pub async fn process_urls_dynamically(
 ///
 /// # Arguments
 ///
-/// * `conn` - A shared, locked database connection.
+/// * `db` - A shared, locked database connection.
 /// * `offset` - The starting point to fetch URLs from.
 /// * `limit` - The maximum number of URLs to fetch.
 ///
@@ -71,12 +71,12 @@ pub async fn process_urls_dynamically(
 ///
 /// A vector of URLs if successful, or an error if the operation fails.
 async fn get_urls_batch(
-    conn: Arc<Mutex<Connection>>,
+    db: &Arc<Mutex<Connection>>,
     offset: usize,
     limit: usize,
 ) -> Result<Vec<String>> {
-    let conn = conn.lock().await;
-    let mut stmt = conn.prepare("SELECT url FROM urls ORDER BY id LIMIT ?1 OFFSET ?2")?;
+    let db = db.lock().await;
+    let mut stmt = db.prepare("SELECT url FROM urls ORDER BY id LIMIT ?1 OFFSET ?2")?;
     let rows = stmt.query_map(params![limit, offset], |row| row.get(0))?;
 
     let mut urls = Vec::new();
@@ -91,24 +91,24 @@ async fn get_urls_batch(
 ///
 /// # Arguments
 ///
-/// * `conn` - A shared, locked database connection.
+/// * `db` - A shared, locked database connection.
 /// * `url` - The URL to be processed.
 ///
 /// # Returns
 ///
 /// An empty `Result` if successful, or an error if the operation fails.
 async fn process_url(
-    conn: Arc<Mutex<Connection>>,
+    db: &Arc<Mutex<Connection>>,
     url: String,
 ) -> Result<()> {
 
     // Checks when URL was last scraped, then doesn't process it if it was scraped recently
     // If URL was scraped with an HTTP error (e.g., 403, 500), process URL
-    let age_url = get_configuration_value_as_i64(conn.clone(), "age_url").await?;
+    let age_url = get_configuration_value_as_i64(db, "age_url").await?;
 
     {
-        let conn = conn.lock().await;
-        let mut stmt = conn.prepare("SELECT date_modified, http_code FROM urls WHERE url = ?1")?;
+        let db = db.lock().await;
+        let mut stmt = db.prepare("SELECT date_modified, http_code FROM urls WHERE url = ?1")?;
         let row = stmt.query_row([url.as_str()], |row| {
             let date_modified: Option<String> = row.get(0)?;
             let http_code: Option<i32> = row.get(1)?;
@@ -133,7 +133,7 @@ async fn process_url(
     }
 
     // Send URL to scraping via FlareSolverr
-    let (status, body) = send_url_to_flaresolverr(conn.clone(), &url).await?;
+    let (status, body) = send_url_to_flaresolverr(db, &url).await?;
 
     // FlareSolverr scraping failed
     if !status.is_success() {
@@ -142,7 +142,7 @@ async fn process_url(
         // Update database
         let http_code = status.as_u16();
         let date_modified = Utc::now().to_rfc3339();
-        update_url_in_database(conn.clone(), &url, &date_modified, http_code).await?;
+        update_url_in_database(db, &url, &date_modified, http_code).await?;
 
         // Generate random delay
         generate_random_delay(500, 6000).await;
@@ -156,16 +156,16 @@ async fn process_url(
     let extract_data = extract_data::extract_data(&body);
 
     // Create WooCommerce products using breadcrumbs from scraped data
-    let wordpress_url = get_configuration_value(conn.clone(), "wordpress_url").await?;
-    let username_api = get_configuration_value(conn.clone(), "username_api").await?;
-    let password_api = get_configuration_value(conn.clone(), "password_api").await?;
+    let wordpress_url = get_configuration_value(db, "wordpress_url").await?;
+    let username_api = get_configuration_value(db, "username_api").await?;
+    let password_api = get_configuration_value(db, "password_api").await?;
 
     let wp = Arc::new(Auth::new(wordpress_url, username_api, password_api));
     let breadcrumbs = &extract_data.breadcrumbs;
     let last_breadcrumb_index = breadcrumbs.len() - 1;
 
     // Process breadcrumb for create category and product
-    let mut current_wordpress_parent = get_configuration_value_as_i64(conn.clone(), "wordpress_parent").await?;
+    let mut current_wordpress_parent = get_configuration_value_as_i64(db, "wordpress_parent").await?;
 
     for (breadcrumb_index, breadcrumb) in breadcrumbs.iter().enumerate() {
         if let Some(id) = breadcrumb.get("id") {
@@ -212,6 +212,8 @@ async fn process_url(
             if breadcrumb_index == last_breadcrumb_index {
                 println!("{}", "Creating product ...".cyan());
 
+                // TODO: Vérifier que le produit n'existe pas déjà dans WooCommerce pour éviter les doublons
+
                 let create_product = match wp.create_product(
                     extract_data.title.to_string(),
                     "draft".to_string(),
@@ -226,17 +228,8 @@ async fn process_url(
                     extract_data.product_id,
                     body.solution.url.to_string(),
                 ).await {
-                    Ok(response) => {
-                        println!("{}", format!("Product created successfully: {:?}", response).green());
-
-                        if let Some(http_status) = response["http_status"].as_u64() {
-                            let product_id = extract_data.product_id as u64;
-
-                            //store.put(&mut writer, &format!("product_{}_id", &product_id), &Value::U64(product_id)).expect("Failed to put data");
-                            //store.put(&mut writer, &format!("product_{}_http_code", &product_id), &Value::U64(http_status)).expect("Failed to put data");
-                            //store.put(&mut writer, &format!("product_{}_date_modified", &product_id), &Value::Str(response["body"]["date_modified"].as_str().unwrap_or(""))).expect("Failed to put data");
-                            //store.put(&mut writer, &format!("product_{}_ps_url", &product_id), &Value::Str(body.solution.url.as_str())).expect("Failed to put data");
-                        }
+                    Ok(..) => {
+                        println!("{}", "Product created successfully".green());
                     }
                     Err(e) => {
                         eprintln!("{}", format!("Failed to create product: {:?}", e).red());
@@ -252,7 +245,7 @@ async fn process_url(
     // Update database
     let date_modified = Utc::now().to_rfc3339();
     let http_code = status.as_u16();
-    update_url_in_database(conn.clone(), &url, &date_modified, http_code).await?;
+    update_url_in_database(db, &url, &date_modified, http_code).await?;
 
     Ok(())
 }
@@ -261,14 +254,14 @@ async fn process_url(
 ///
 /// # Arguments
 ///
-/// * `conn` - A reference to the database connection.
+/// * `db` - A reference to the database connection.
 /// * `url` - The URL to be scraped.
 ///
 /// # Returns
 ///
 /// If successful, returns the status and body of the response.
 async fn send_url_to_flaresolverr(
-    conn: Arc<Mutex<Connection>>,
+    db: &Arc<Mutex<Connection>>,
     url: &str,
 ) -> Result<(
     reqwest::StatusCode,
@@ -285,7 +278,7 @@ async fn send_url_to_flaresolverr(
     });
 
     // Get the FlareSolverr URL from the configuration
-    let flaresolverr_url = get_configuration_value(conn.clone(), "flaresolverr_url").await?;
+    let flaresolverr_url = get_configuration_value(db, "flaresolverr_url").await?;
 
     // Send the request to FlareSolverr
     let response = client
@@ -307,7 +300,7 @@ async fn send_url_to_flaresolverr(
 ///
 /// # Arguments
 ///
-/// * `conn` - A shared, locked database connection.
+/// * `db` - A shared, locked database connection.
 /// * `url` - The URL to update.
 /// * `date_modified` - The new modification date in RFC3339 format.
 /// * `http_code` - The new HTTP status code.
@@ -316,13 +309,13 @@ async fn send_url_to_flaresolverr(
 ///
 /// `Ok(())` if the update is successful, or an error if it fails.
 async fn update_url_in_database(
-    conn: Arc<Mutex<Connection>>,
+    db: &Arc<Mutex<Connection>>,
     url: &str,
     date_modified: &str,
     http_code: u16,
 ) -> Result<()> {
-    let conn = conn.lock().await;
-    conn.execute(
+    let db = db.lock().await;
+    db.execute(
         "UPDATE urls SET date_modified = ?1, http_code = ?2 WHERE url = ?3",
         params![date_modified, http_code, url],
     )?;
