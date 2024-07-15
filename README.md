@@ -1,0 +1,3 @@
+- Get urls via sitemap.xml
+- Updates urls to be scraped if more than 7 days old
+- Scrapping urls and creating WooCommerce categories and products in parallel
