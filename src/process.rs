@@ -6,14 +6,14 @@ use colored::Colorize;
 use futures::{stream, StreamExt};
 use regex::Regex;
 use reqwest::Client;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::json;
 use tokio::sync::Mutex;
 use tokio::task;
 
 use crate::config::get_configuration::{get_configuration_value, get_configuration_value_as_i64};
-use crate::utilities::generate_random_delay::generate_random_delay;
 use crate::utilities::{extract_data, extract_id_from_url};
+use crate::utilities::generate_random_delay::generate_random_delay;
 use crate::wordpress::main::{
     Auth, CreateCategory, CreateProduct, FindCategoryByCustomField, FindProductByCustomField,
 };
@@ -134,7 +134,7 @@ async fn process_url(db: &Arc<Mutex<Connection>>, url: String) -> Result<()> {
                             "Skipping URL as it was modified less than {} hours ago: {}",
                             age_url, url
                         )
-                        .cyan()
+                            .cyan()
                     );
                     return Ok(());
                 }
@@ -153,7 +153,7 @@ async fn process_url(db: &Arc<Mutex<Connection>>, url: String) -> Result<()> {
                 "Failed to create product with status {}: {:?}",
                 status, body
             )
-            .red()
+                .red()
         );
 
         // Update database
@@ -170,7 +170,7 @@ async fn process_url(db: &Arc<Mutex<Connection>>, url: String) -> Result<()> {
     }
 
     // FlareSolverr scraping success
-    println!("{}", "Scraping success!".green());
+    println!("{}", "Scraping success".green());
 
     let extract_data = extract_data::extract_data(&body);
 
@@ -207,7 +207,7 @@ async fn process_url(db: &Arc<Mutex<Connection>>, url: String) -> Result<()> {
                                     "Product found, with id: {:?}",
                                     product_info.product_id.unwrap_or(0)
                                 )
-                                .yellow()
+                                    .yellow()
                             );
                             continue;
                         }
@@ -220,7 +220,16 @@ async fn process_url(db: &Arc<Mutex<Connection>>, url: String) -> Result<()> {
                 }
 
                 // Create product in WooCommerce
-                println!("{}", "Creating product ...".cyan());
+                println!(
+                    "{}",
+                    format!(
+                        "Creating product: {} | id: {}",
+                        extract_data.title.to_string(),
+                        extract_data.product_id
+                    )
+                        .green()
+                        .bold()
+                );
                 match wp
                     .create_product(
                         extract_data.title.to_string(),
@@ -273,7 +282,7 @@ async fn process_url(db: &Arc<Mutex<Connection>>, url: String) -> Result<()> {
                                 "Category found: {:?}",
                                 category_info.category_name.as_deref().unwrap_or("Unknown")
                             )
-                            .cyan()
+                                .yellow()
                         );
 
                         if let Some(id) = category_info.category_id {
