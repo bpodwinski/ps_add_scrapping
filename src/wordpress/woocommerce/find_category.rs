@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 use serde_json::Value;
 
-use crate::wordpress::main::{Auth, FindCategoryCustomPsAddonsCatId};
+use crate::wordpress::main::{Auth, FindCategoryByCustomField};
 
 pub struct CategoryInfo {
     pub status: String,
@@ -12,14 +12,17 @@ pub struct CategoryInfo {
     pub category_name: Option<String>,
 }
 
-impl FindCategoryCustomPsAddonsCatId for Auth {
-    async fn find_category_custom_ps_addons_cat_id(&self, ps_addons_cat_id: u32) -> Result<CategoryInfo> {
+impl FindCategoryByCustomField for Auth {
+    async fn find_category_by_custom_field(
+        &self,
+        custom_field: u32,
+    ) -> Result<CategoryInfo> {
         let client = Client::new();
         let headers = self.create_headers(None)?;
 
         let api_url = format!(
             "{}/wp-json/wc/v3/products/categories?ps_addons_cat_id={}",
-            self.base_url(), ps_addons_cat_id
+            self.base_url(), custom_field
         );
 
         let response = client
@@ -37,12 +40,12 @@ impl FindCategoryCustomPsAddonsCatId for Auth {
 
             if !categories.is_empty() {
                 for category in categories {
-                    if category["ps_addons_cat_id"] == ps_addons_cat_id {
+                    if category["ps_addons_cat_id"] == custom_field {
                         return Ok(CategoryInfo {
                             status: "found".to_string(),
                             message: "Category already exists".to_string(),
                             category_id: category["id"].as_u64().map(|id| id as u32),
-                            ps_addons_cat_id: Some(ps_addons_cat_id),
+                            ps_addons_cat_id: Some(custom_field),
                             category_name: category["name"].as_str().map(|name| name.to_string()),
                         });
                     }

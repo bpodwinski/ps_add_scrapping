@@ -3,10 +3,12 @@ use base64::{Engine, engine::general_purpose::STANDARD_NO_PAD};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde_json::Value;
 
-use crate::wordpress::woocommerce::find_category_custom_ps_addons_cat_id::CategoryInfo;
+use crate::wordpress::woocommerce::create_product::ProductCreationResult;
+use crate::wordpress::woocommerce::find_category::CategoryInfo;
+use crate::wordpress::woocommerce::find_product::ProductInfo;
 
 pub struct Auth {
-    pub(crate) base_url: String,
+    pub base_url: String,
     username: String,
     password: String,
 }
@@ -75,7 +77,15 @@ pub trait CreateProduct {
         images: &Vec<String>,
         ps_product_id: u32,
         ps_product_url: String,
-    ) -> Result<Value>;
+    ) -> Result<ProductCreationResult>;
+}
+
+pub trait FindProductByCustomField {
+    async fn find_product_by_custom_field(
+        &self,
+        name: &str,
+        status: &str,
+    ) -> Result<ProductInfo>;
 }
 
 // pub trait CreatePage {
@@ -86,8 +96,8 @@ pub trait CreateProduct {
 //     async fn find_page(&self, title: &str) -> Result<Option<String>>;
 // }
 
-pub trait FindCategoryCustomPsAddonsCatId {
-    /// Implementation of the `FindCategoryCustomPsAddonsCatId` trait for the `Auth` struct.
+pub trait FindCategoryByCustomField {
+    /// Implementation of the `FindCategoryByCustomField` trait for the `Auth` struct.
     ///
     /// This function sends a request to the WordPress WooCommerce API to search for a product category
     /// with the provided PrestaShop addons category ID. It constructs the necessary API URL, makes the HTTP request,
@@ -95,7 +105,7 @@ pub trait FindCategoryCustomPsAddonsCatId {
     ///
     /// # Arguments
     ///
-    /// * `ps_addons_cat_id` - The PrestaShop addons category ID to search for.
+    /// * `custom_field` - The PrestaShop addons category ID to search for.
     ///
     /// # Returns
     ///
@@ -109,7 +119,7 @@ pub trait FindCategoryCustomPsAddonsCatId {
     /// - Constructing the HTTP headers.
     /// - Sending the HTTP request.
     /// - Parsing the response body as JSON.
-    async fn find_category_custom_ps_addons_cat_id(&self, ps_addons_cat_id: u32) -> Result<CategoryInfo>;
+    async fn find_category_by_custom_field(&self, custom_field: u32) -> Result<CategoryInfo>;
 }
 
 pub trait CreateCategory {

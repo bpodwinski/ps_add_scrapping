@@ -1,8 +1,15 @@
 use anyhow::{Context, Result};
-use reqwest::{Client, StatusCode};
+use reqwest::Client;
 use serde_json::{from_str, json, Value};
 
 use crate::wordpress::main::{Auth, CreateProduct};
+
+#[derive(Debug)]
+pub struct ProductCreationResult {
+    pub http_status: u16,
+    pub response_body: String,
+    pub response_json: Value,
+}
 
 impl CreateProduct for Auth {
     async fn create_product(
@@ -19,7 +26,7 @@ impl CreateProduct for Auth {
         images: &Vec<String>,
         ps_product_id: u32,
         ps_product_url: String,
-    ) -> Result<Value> {
+    ) -> Result<ProductCreationResult> {
         let client = Client::new();
         let headers = self.create_headers(None)?;
 
@@ -39,7 +46,7 @@ impl CreateProduct for Auth {
             "meta_data": [
             {
               "key": "ps_product_id",
-              "value": ps_product_id
+              "value": ps_product_id.to_string()
             },
             {
               "key": "ps_product_url",
@@ -57,20 +64,20 @@ impl CreateProduct for Auth {
             .context("Failed to send create product request")?;
 
         // Save the status before consuming the response
-        let status_code = response.status();
+        let status_code = response.status().as_u16();
         let response_body = response.text().await.context("Failed to read response body")?;
 
         let body_json: Result<Value, _> = from_str(&response_body);
 
-        let result = json!({
-            "http_status": status_code.as_u16(),
-            "body": body_json.unwrap_or(json!({"raw_body": response_body})),
-        });
+        let result = ProductCreationResult {
+            http_status: status_code,
+            response_body: response_body.clone(),
+            response_json: body_json.unwrap_or(json!({"raw_body": response_body})),
+        };
 
         match status_code {
-            StatusCode::CREATED => Ok(result),
-            StatusCode::BAD_REQUEST => Ok(result),
-            _ => Err(anyhow::anyhow!("Failed to create product with status {}: {}", status_code, response_body))
+            200 | 201 => Ok(result),
+            _ => Err(anyhow::anyhow!(format!("HTTP {}: {}", status_code, response_body))),
         }
     }
 }

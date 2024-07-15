@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use colored::Colorize;
 use futures::{stream, StreamExt};
+use regex::Regex;
 use reqwest::Client;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::json;
@@ -13,7 +14,7 @@ use tokio::task;
 use crate::config::get_configuration::{get_configuration_value, get_configuration_value_as_i64};
 use crate::utilities::{extract_data, extract_id_from_url};
 use crate::utilities::generate_random_delay::generate_random_delay;
-use crate::wordpress::main::{Auth, CreateCategory, CreateProduct, FindCategoryCustomPsAddonsCatId};
+use crate::wordpress::main::{Auth, CreateCategory, CreateProduct, FindCategoryByCustomField, FindProductByCustomField};
 
 /// Processes URLs in batches, executing a fixed number of tasks concurrently.
 ///
@@ -111,7 +112,7 @@ async fn process_url(
         let mut stmt = db.prepare("SELECT date_modified, http_code FROM urls WHERE url = ?1")?;
         let row = stmt.query_row([url.as_str()], |row| {
             let date_modified: Option<String> = row.get(0)?;
-            let http_code: Option<i32> = row.get(1)?;
+            let http_code: i32 = row.get(1).unwrap_or(0);
             Ok((date_modified, http_code))
         }).optional()?;
 
@@ -124,7 +125,7 @@ async fn process_url(
                 let last_mod_date_utc = last_mod_date.with_timezone(&Utc);
                 let hours_difference = (now - last_mod_date_utc).num_hours();
 
-                if hours_difference < age_url && http_code == Some(200) {
+                if hours_difference <= age_url && http_code == 200 {
                     println!("{}", format!("Skipping URL as it was modified less than {} hours ago: {}", age_url, url).cyan());
                     return Ok(());
                 }
@@ -170,52 +171,29 @@ async fn process_url(
     for (breadcrumb_index, breadcrumb) in breadcrumbs.iter().enumerate() {
         if let Some(id) = breadcrumb.get("id") {
 
-            // Create or update category
-            let id_ps_category = extract_id_from_url::extract_id_from_url(id);
-
-            // Check if category exists in WooCommerce
-            match wp.find_category_custom_ps_addons_cat_id(id_ps_category).await {
-                Ok(category_info) => {
-                    match category_info.status.as_ref() {
-                        "found" => {
-                            println!("{}", format!("Category found: {:?}", category_info.category_name.as_deref().unwrap_or("Unknown")).cyan());
-
-                            if let Some(id) = category_info.category_id {
-                                current_wordpress_parent = id as i64;
-                            }
-                        }
-                        "notfound" => {
-                            println!("{}", "No category found with the given ID".cyan());
-                            let name = breadcrumb.get("name").unwrap().to_string();
-
-                            match wp.create_category(name, current_wordpress_parent as u32, id_ps_category).await {
-                                Ok(response) => {
-                                    println!("{}", format!("Category created successfully: {:?}", category_info.category_name.as_deref().unwrap_or("Unknown")).green());
-
-                                    if let Some(id_category) = response.get("id").and_then(|v| v.as_i64()) {
-                                        current_wordpress_parent = id_category;
-                                    } else {
-                                        eprintln!("{}", "Failed to extract parent_id from the response".red());
-                                    }
-                                }
-                                Err(e) => eprintln!("{}", format!("Failed to create category: {:?}", e).red()),
-                            }
-                        }
-                        _ => eprintln!("{}", format!("Failed to create category: {:?}", category_info.message).red()),
-                    }
-                }
-                Err(e) => {
-                    eprintln!("{}", format!("Failed to find category: {:?}", e).red());
-                }
-            }
-
             // Create product at last breadcrumb
             if breadcrumb_index == last_breadcrumb_index {
+
+                // Check if product exists in WooCommerce
+                match wp.find_product_by_custom_field("ps_product_id", &extract_data.product_id.to_string()).await {
+                    Ok(product_info) => {
+                        match product_info.status.as_str() {
+                            "found" => {
+                                println!("{}", format!("Product found, with id: {:?}", product_info.product_id.unwrap_or(0)).yellow());
+                                continue;
+                            }
+                            "notfound" => {
+                                println!("{}", "Product not found".cyan());
+                            }
+                            _ => println!("{}", "An unknown error occurred".red()),
+                        }
+                    }
+                    Err(e) => eprintln!("Error occurred: {:?}", e),
+                }
+
+                // Create product in WooCommerce
                 println!("{}", "Creating product ...".cyan());
-
-                // TODO: Vérifier que le produit n'existe pas déjà dans WooCommerce pour éviter les doublons
-
-                let create_product = match wp.create_product(
+                match wp.create_product(
                     extract_data.title.to_string(),
                     "draft".to_string(),
                     "simple".to_string(),
@@ -233,9 +211,60 @@ async fn process_url(
                         println!("{}", "Product created successfully".green());
                     }
                     Err(e) => {
-                        eprintln!("{}", format!("Failed to create product: {:?}", e).red());
+                        eprintln!("{}", "Product created failed".red());
+
+                        // Update database
+                        let re = Regex::new(r"HTTP (\d+):").unwrap();
+                        let http_code = if let Some(cap) = re.captures(&e.to_string()) {
+                            cap.get(1).map_or(500, |m| m.as_str().parse::<u16>().unwrap_or(500))
+                        } else {
+                            500
+                        };
+                        let date_modified = Utc::now().to_rfc3339();
+                        update_url_in_database(db, &url, &date_modified, http_code).await?;
+
+                        continue;
                     }
                 };
+            }
+
+            // Create or update category
+            let id_ps_category = extract_id_from_url::extract_id_from_url(id);
+
+            // Check if category exists in WooCommerce
+            match wp.find_category_by_custom_field(id_ps_category).await {
+                Ok(category_info) => {
+                    match category_info.status.as_ref() {
+                        "found" => {
+                            println!("{}", format!("Category found: {:?}", category_info.category_name.as_deref().unwrap_or("Unknown")).cyan());
+
+                            if let Some(id) = category_info.category_id {
+                                current_wordpress_parent = id as i64;
+                            }
+                        }
+                        "notfound" => {
+                            println!("{}", "No category found".cyan());
+                            let name = breadcrumb.get("name").unwrap().to_string();
+
+                            match wp.create_category(name, current_wordpress_parent as u32, id_ps_category).await {
+                                Ok(response) => {
+                                    println!("{}", "Category created successfully".green());
+
+                                    if let Some(id_category) = response.get("id").and_then(|v| v.as_i64()) {
+                                        current_wordpress_parent = id_category;
+                                    } else {
+                                        eprintln!("{}", "Failed to extract parent_id from the response".red());
+                                    }
+                                }
+                                Err(e) => eprintln!("{}", format!("Failed to create category: {:?}", e).red()),
+                            }
+                        }
+                        _ => eprintln!("{}", format!("Failed to create category: {:?}", category_info.message).red()),
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{}", format!("Failed to find category: {:?}", e).red());
+                }
             }
         }
     }

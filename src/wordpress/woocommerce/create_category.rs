@@ -36,6 +36,7 @@ impl CreateCategory for Auth {
         let response_json: Value = serde_json::from_str(&response_body)
             .context("Failed to parse response body as JSON")?;
 
+        // TODO: change to return http_code
         match status_code {
             StatusCode::CREATED => Ok(response_json),
             StatusCode::BAD_REQUEST => Err(anyhow::anyhow!(response_body)),
