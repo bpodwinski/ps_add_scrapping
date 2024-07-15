@@ -67,7 +67,8 @@ pub async fn init() -> anyhow::Result<Database> {
                     date_modified TEXT
                 )",
                 [],
-            ).context("Failed to create urls table")?;
+            )
+            .context("Failed to create urls table")?;
 
             db.execute(
                 "CREATE TABLE IF NOT EXISTS configuration (
@@ -76,7 +77,8 @@ pub async fn init() -> anyhow::Result<Database> {
                     value TEXT NOT NULL
                 )",
                 [],
-            ).context("Failed to create configuration table")?;
+            )
+            .context("Failed to create configuration table")?;
         }
     }
 

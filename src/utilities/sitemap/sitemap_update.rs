@@ -25,7 +25,14 @@ pub async fn sitemap_update(
         let duration = now.signed_duration_since(last_insert_date);
 
         if duration < Duration::days(sitemap_frequency_update) {
-            println!("{}", format!("Last sitemap update was less than {} days ago", sitemap_frequency_update).yellow());
+            println!(
+                "{}",
+                format!(
+                    "Last sitemap update was less than {} days ago",
+                    sitemap_frequency_update
+                )
+                .yellow()
+            );
             true
         } else {
             false
@@ -39,27 +46,38 @@ pub async fn sitemap_update(
         let sitemap_index_content = match get_sitemap_index_content(db, &robots_url).await {
             Ok(content) => content,
             Err(e) => {
-                eprintln!("{}", format!("Failed to extract sitemap index data: {:?}", e).red());
+                eprintln!(
+                    "{}",
+                    format!("Failed to extract sitemap index data: {:?}", e).red()
+                );
                 return Err(e.into());
             }
         };
 
         // Extract content for sitemap url
-        let sitemap_urls_content = match get_sitemap_urls_content(db, &sitemap_index_content, &sitemap_lang).await {
-            Ok(content) => {
-                content
-            }
-            Err(e) => {
-                eprintln!("{}", format!("Failed to fetch sitemap url data: {:?}", e).red());
-                return Err(e.into());
-            }
-        };
+        let sitemap_urls_content =
+            match get_sitemap_urls_content(db, &sitemap_index_content, &sitemap_lang).await {
+                Ok(content) => content,
+                Err(e) => {
+                    eprintln!(
+                        "{}",
+                        format!("Failed to fetch sitemap url data: {:?}", e).red()
+                    );
+                    return Err(e.into());
+                }
+            };
 
         // Insert sitemap urls into database
         match insert_sitemap_into_sql(&db, &sitemap_urls_content).await {
-            Ok(_) => println!("{}", "Added sitemap data successfully into database".green()),
+            Ok(_) => println!(
+                "{}",
+                "Added sitemap data successfully into database".green()
+            ),
             Err(e) => {
-                eprintln!("{}", format!("Failed to added sitemap data into database: {:?}", e).red());
+                eprintln!(
+                    "{}",
+                    format!("Failed to added sitemap data into database: {:?}", e).red()
+                );
                 return Err(e.into());
             }
         }
@@ -70,11 +88,10 @@ pub async fn sitemap_update(
     Ok(())
 }
 
-async fn get_last_xml_insert_date(
-    db: &Arc<Mutex<Connection>>
-) -> Result<Option<String>> {
+async fn get_last_xml_insert_date(db: &Arc<Mutex<Connection>>) -> Result<Option<String>> {
     let db = db.lock().await;
-    let mut stmt = db.prepare("SELECT value FROM configuration WHERE key = 'last_sitemap_insert_date'")?;
+    let mut stmt =
+        db.prepare("SELECT value FROM configuration WHERE key = 'last_sitemap_insert_date'")?;
     let mut rows = stmt.query([])?;
 
     if let Some(row) = rows.next()? {

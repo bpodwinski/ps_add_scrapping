@@ -13,16 +13,14 @@ pub struct CategoryInfo {
 }
 
 impl FindCategoryByCustomField for Auth {
-    async fn find_category_by_custom_field(
-        &self,
-        custom_field: u32,
-    ) -> Result<CategoryInfo> {
+    async fn find_category_by_custom_field(&self, custom_field: u32) -> Result<CategoryInfo> {
         let client = Client::new();
         let headers = self.create_headers(None)?;
 
         let api_url = format!(
             "{}/wp-json/wc/v3/products/categories?ps_addons_cat_id={}",
-            self.base_url(), custom_field
+            self.base_url(),
+            custom_field
         );
 
         let response = client

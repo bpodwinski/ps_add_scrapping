@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use colored::Colorize;
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use serde::Deserialize;
 use tokio::sync::Mutex;
 
@@ -82,7 +82,10 @@ pub async fn load_configuration(db: &Arc<Mutex<Connection>>, file_path: &str) ->
     )?;
     db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
-        params!["max_concurrency", settings.processing.max_concurrency.to_string()],
+        params![
+            "max_concurrency",
+            settings.processing.max_concurrency.to_string()
+        ],
     )?;
     db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
@@ -98,7 +101,13 @@ pub async fn load_configuration(db: &Arc<Mutex<Connection>>, file_path: &str) ->
     )?;
     db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
-        params!["sitemap_frequency_update", settings.prestashop_addon.sitemap_frequency_update.to_string()],
+        params![
+            "sitemap_frequency_update",
+            settings
+                .prestashop_addon
+                .sitemap_frequency_update
+                .to_string()
+        ],
     )?;
     db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
@@ -130,14 +139,23 @@ pub async fn load_configuration(db: &Arc<Mutex<Connection>>, file_path: &str) ->
     )?;
     db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
-        params!["wordpress_parent", settings.wordpress_page.parent.to_string()],
+        params![
+            "wordpress_parent",
+            settings.wordpress_page.parent.to_string()
+        ],
     )?;
     db.execute(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)",
-        params!["wordpress_author", settings.wordpress_page.author.to_string()],
+        params![
+            "wordpress_author",
+            settings.wordpress_page.author.to_string()
+        ],
     )?;
 
-    println!("{}", "Configurations loaded and added or updated into database".green());
+    println!(
+        "{}",
+        "Configurations loaded and added or updated into database".green()
+    );
 
     Ok(())
 }

@@ -72,7 +72,9 @@ pub async fn get_sitemap_urls_content(
                 in_url_tag = false;
             }
             Ok(Event::Start(ref e)) if e.name().as_ref() == b"loc" && in_url_tag => {
-                let url = reader.read_text(e.name()).context("Failed to read loc text")?;
+                let url = reader
+                    .read_text(e.name())
+                    .context("Failed to read loc text")?;
                 if url.contains(&format!("sitemap_{}", sitemap_lang)) {
                     // Prepare the request payload for the sitemap URL
                     let sitemap_payload = RequestPayload {
@@ -89,10 +91,14 @@ pub async fn get_sitemap_urls_content(
                         .await
                         .context("Failed to send request to Flaresolverr")?;
 
-                    let raw_sitemap_response = sitemap_response.text().await.context("Failed to read raw response body")?;
+                    let raw_sitemap_response = sitemap_response
+                        .text()
+                        .await
+                        .context("Failed to read raw response body")?;
 
-                    let sitemap_response_payload: ResponsePayload = serde_json::from_str(&raw_sitemap_response)
-                        .context("Failed to parse Flaresolverr response as JSON")?;
+                    let sitemap_response_payload: ResponsePayload =
+                        serde_json::from_str(&raw_sitemap_response)
+                            .context("Failed to parse Flaresolverr response as JSON")?;
 
                     let sitemap_body = sitemap_response_payload.solution.response;
 
@@ -105,7 +111,13 @@ pub async fn get_sitemap_urls_content(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => return Err(anyhow::anyhow!("Error at position {}: {:?}", reader.buffer_position(), e)),
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "Error at position {}: {:?}",
+                    reader.buffer_position(),
+                    e
+                ))
+            }
             _ => (),
         }
         buf.clear();
@@ -117,5 +129,7 @@ pub async fn get_sitemap_urls_content(
 /// Extracts the content inside <urlset> tags from the given HTML string.
 fn extract_xml_content(html: &str) -> Option<String> {
     let urlset_re = Regex::new(r"(?s)<urlset[^>]*>(.*?)</urlset>").ok()?;
-    urlset_re.captures(html).and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
+    urlset_re
+        .captures(html)
+        .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
 }

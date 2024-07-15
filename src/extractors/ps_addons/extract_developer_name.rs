@@ -8,6 +8,12 @@ pub fn extract_developer_name(html_content: &str) -> String {
     // Select the first link with the specified ID and extract the 'title' attribute
     document.select(&selector).next().map_or_else(
         || String::new(), // Return an empty string if no element is found
-        |element| element.value().attr("title").unwrap_or_default().to_string(),
+        |element| {
+            element
+                .value()
+                .attr("title")
+                .unwrap_or_default()
+                .to_string()
+        },
     )
 }

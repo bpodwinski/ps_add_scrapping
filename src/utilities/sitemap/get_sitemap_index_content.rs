@@ -72,7 +72,10 @@ pub async fn get_sitemap_index_content(
         .await
         .context("Failed to send request to Flaresolverr")?;
 
-    let raw_robots_response = robots_response.text().await.context("Failed to read raw response body")?;
+    let raw_robots_response = robots_response
+        .text()
+        .await
+        .context("Failed to read raw response body")?;
 
     let robots_response_payload: ResponsePayload = serde_json::from_str(&raw_robots_response)
         .context("Failed to parse Flaresolverr response as JSON")?;
@@ -80,7 +83,8 @@ pub async fn get_sitemap_index_content(
     let robots_body = robots_response_payload.solution.response;
 
     // Extract content from <pre> tags
-    let pre_content = extract_pre_content(&robots_body).context("Failed to extract content from <pre> tags")?;
+    let pre_content =
+        extract_pre_content(&robots_body).context("Failed to extract content from <pre> tags")?;
 
     // Regex to find the sitemap URL
     let re = Regex::new(r"(?im)^Sitemap:\s*(?P<url>https?://\S+)$")
@@ -111,7 +115,10 @@ pub async fn get_sitemap_index_content(
         .await
         .context("Failed to send request to Flaresolverr")?;
 
-    let raw_sitemap_response = sitemap_response.text().await.context("Failed to read raw response body")?;
+    let raw_sitemap_response = sitemap_response
+        .text()
+        .await
+        .context("Failed to read raw response body")?;
 
     let sitemap_response_payload: ResponsePayload = serde_json::from_str(&raw_sitemap_response)
         .context("Failed to parse Flaresolverr response as JSON")?;
@@ -128,11 +135,15 @@ pub async fn get_sitemap_index_content(
 /// Extracts content inside <pre> tags from the given HTML string.
 fn extract_pre_content(html: &str) -> Option<String> {
     let pre_re = Regex::new(r"(?s)<pre.*?>(.*?)</pre>").ok()?;
-    pre_re.captures(html).and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
+    pre_re
+        .captures(html)
+        .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
 }
 
 /// Extracts content inside <sitemapindex> tags from the given HTML string.
 fn extract_sitemap_content(html: &str) -> Option<String> {
     let sitemap_re = Regex::new(r"(?s)<sitemapindex[^>]*>(.*?)</sitemapindex>").ok()?;
-    sitemap_re.captures(html).and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
+    sitemap_re
+        .captures(html)
+        .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
 }

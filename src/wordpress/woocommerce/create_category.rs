@@ -31,7 +31,10 @@ impl CreateCategory for Auth {
             .context("Failed to send create category request")?;
 
         let status_code = response.status();
-        let response_body = response.text().await.context("Failed to read response body")?;
+        let response_body = response
+            .text()
+            .await
+            .context("Failed to read response body")?;
 
         let response_json: Value = serde_json::from_str(&response_body)
             .context("Failed to parse response body as JSON")?;
@@ -40,7 +43,11 @@ impl CreateCategory for Auth {
         match status_code {
             StatusCode::CREATED => Ok(response_json),
             StatusCode::BAD_REQUEST => Err(anyhow::anyhow!(response_body)),
-            _ => Err(anyhow::anyhow!("Failed to create category with status {}: {}", status_code, response_body))
+            _ => Err(anyhow::anyhow!(
+                "Failed to create category with status {}: {}",
+                status_code,
+                response_body
+            )),
         }
     }
 }

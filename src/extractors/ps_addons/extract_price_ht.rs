@@ -7,5 +7,5 @@ pub fn extract_price_ht(html_content: &str) -> String {
     regex
         .captures(html_content)
         .and_then(|caps| caps.get(1).map(|match_| match_.as_str().to_string()))
-        .unwrap_or_default()  // Return an empty string if no price is found
+        .unwrap_or_default() // Return an empty string if no price is found
 }

@@ -6,15 +6,17 @@ use colored::Colorize;
 use futures::{stream, StreamExt};
 use regex::Regex;
 use reqwest::Client;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::json;
 use tokio::sync::Mutex;
 use tokio::task;
 
 use crate::config::get_configuration::{get_configuration_value, get_configuration_value_as_i64};
-use crate::utilities::{extract_data, extract_id_from_url};
 use crate::utilities::generate_random_delay::generate_random_delay;
-use crate::wordpress::main::{Auth, CreateCategory, CreateProduct, FindCategoryByCustomField, FindProductByCustomField};
+use crate::utilities::{extract_data, extract_id_from_url};
+use crate::wordpress::main::{
+    Auth, CreateCategory, CreateProduct, FindCategoryByCustomField, FindProductByCustomField,
+};
 
 /// Processes URLs in batches, executing a fixed number of tasks concurrently.
 ///
@@ -52,7 +54,10 @@ pub async fn process_urls_dynamically(
         }));
 
         // Buffer the tasks to ensure a fixed number of tasks are running at any time
-        tasks.buffer_unordered(max_concurrent_tasks).for_each(|_| async {}).await;
+        tasks
+            .buffer_unordered(max_concurrent_tasks)
+            .for_each(|_| async {})
+            .await;
 
         offset += batch_size;
     }
@@ -98,11 +103,7 @@ async fn get_urls_batch(
 /// # Returns
 ///
 /// An empty `Result` if successful, or an error if the operation fails.
-async fn process_url(
-    db: &Arc<Mutex<Connection>>,
-    url: String,
-) -> Result<()> {
-
+async fn process_url(db: &Arc<Mutex<Connection>>, url: String) -> Result<()> {
     // Checks when URL was last scraped, then doesn't process it if it was scraped recently
     // If URL was scraped with an HTTP error (e.g., 403, 500), process URL
     let age_url = get_configuration_value_as_i64(db, "age_url").await?;
@@ -110,14 +111,15 @@ async fn process_url(
     {
         let db = db.lock().await;
         let mut stmt = db.prepare("SELECT date_modified, http_code FROM urls WHERE url = ?1")?;
-        let row = stmt.query_row([url.as_str()], |row| {
-            let date_modified: Option<String> = row.get(0)?;
-            let http_code: i32 = row.get(1).unwrap_or(0);
-            Ok((date_modified, http_code))
-        }).optional()?;
+        let row = stmt
+            .query_row([url.as_str()], |row| {
+                let date_modified: Option<String> = row.get(0)?;
+                let http_code: i32 = row.get(1).unwrap_or(0);
+                Ok((date_modified, http_code))
+            })
+            .optional()?;
 
         if let Some((date_modified, http_code)) = row {
-
             // Skip URL if it was modified less than `age_url` hours ago and http_code is 200
             if let Some(date_modified) = date_modified {
                 let last_mod_date = DateTime::parse_from_rfc3339(&date_modified)?;
@@ -126,7 +128,14 @@ async fn process_url(
                 let hours_difference = (now - last_mod_date_utc).num_hours();
 
                 if hours_difference <= age_url && http_code == 200 {
-                    println!("{}", format!("Skipping URL as it was modified less than {} hours ago: {}", age_url, url).cyan());
+                    println!(
+                        "{}",
+                        format!(
+                            "Skipping URL as it was modified less than {} hours ago: {}",
+                            age_url, url
+                        )
+                        .cyan()
+                    );
                     return Ok(());
                 }
             }
@@ -138,7 +147,14 @@ async fn process_url(
 
     // FlareSolverr scraping failed
     if !status.is_success() {
-        eprintln!("{}", format!("Failed to create product with status {}: {:?}", status, body).red());
+        eprintln!(
+            "{}",
+            format!(
+                "Failed to create product with status {}: {:?}",
+                status, body
+            )
+            .red()
+        );
 
         // Update database
         let http_code = status.as_u16();
@@ -148,7 +164,9 @@ async fn process_url(
         // Generate random delay
         generate_random_delay(500, 6000).await;
 
-        return Err(anyhow::anyhow!("Failed to process URL due to FlareSolverr error"));
+        return Err(anyhow::anyhow!(
+            "Failed to process URL due to FlareSolverr error"
+        ));
     }
 
     // FlareSolverr scraping success
@@ -166,47 +184,60 @@ async fn process_url(
     let last_breadcrumb_index = breadcrumbs.len() - 1;
 
     // Process breadcrumb for create category and product
-    let mut current_wordpress_parent = get_configuration_value_as_i64(db, "wordpress_parent").await?;
+    let mut current_wordpress_parent =
+        get_configuration_value_as_i64(db, "wordpress_parent").await?;
 
     for (breadcrumb_index, breadcrumb) in breadcrumbs.iter().enumerate() {
         if let Some(id) = breadcrumb.get("id") {
-
             // Create product at last breadcrumb
             if breadcrumb_index == last_breadcrumb_index {
-
                 // Check if product exists in WooCommerce
-                match wp.find_product_by_custom_field("ps_product_id", &extract_data.product_id.to_string()).await {
-                    Ok(product_info) => {
-                        match product_info.status.as_str() {
-                            "found" => {
-                                println!("{}", format!("Product found, with id: {:?}", product_info.product_id.unwrap_or(0)).yellow());
-                                continue;
-                            }
-                            "notfound" => {
-                                println!("{}", "Product not found".cyan());
-                            }
-                            _ => println!("{}", "An unknown error occurred".red()),
+                match wp
+                    .find_product_by_custom_field(
+                        "ps_product_id",
+                        &extract_data.product_id.to_string(),
+                    )
+                    .await
+                {
+                    Ok(product_info) => match product_info.status.as_str() {
+                        "found" => {
+                            println!(
+                                "{}",
+                                format!(
+                                    "Product found, with id: {:?}",
+                                    product_info.product_id.unwrap_or(0)
+                                )
+                                .yellow()
+                            );
+                            continue;
                         }
-                    }
+                        "notfound" => {
+                            println!("{}", "Product not found".cyan());
+                        }
+                        _ => println!("{}", "An unknown error occurred".red()),
+                    },
                     Err(e) => eprintln!("Error occurred: {:?}", e),
                 }
 
                 // Create product in WooCommerce
                 println!("{}", "Creating product ...".cyan());
-                match wp.create_product(
-                    extract_data.title.to_string(),
-                    "draft".to_string(),
-                    "simple".to_string(),
-                    true,
-                    true,
-                    extract_data.features.to_string(),
-                    extract_data.description.to_string(),
-                    extract_data.price_ht.to_string(),
-                    vec![current_wordpress_parent as u32],
-                    &extract_data.image_urls,
-                    extract_data.product_id,
-                    body.solution.url.to_string(),
-                ).await {
+                match wp
+                    .create_product(
+                        extract_data.title.to_string(),
+                        "draft".to_string(),
+                        "simple".to_string(),
+                        true,
+                        true,
+                        extract_data.features.to_string(),
+                        extract_data.description.to_string(),
+                        extract_data.price_ht.to_string(),
+                        vec![current_wordpress_parent as u32],
+                        &extract_data.image_urls,
+                        extract_data.product_id,
+                        body.solution.url.to_string(),
+                    )
+                    .await
+                {
                     Ok(..) => {
                         println!("{}", "Product created successfully".green());
                     }
@@ -216,7 +247,8 @@ async fn process_url(
                         // Update database
                         let re = Regex::new(r"HTTP (\d+):").unwrap();
                         let http_code = if let Some(cap) = re.captures(&e.to_string()) {
-                            cap.get(1).map_or(500, |m| m.as_str().parse::<u16>().unwrap_or(500))
+                            cap.get(1)
+                                .map_or(500, |m| m.as_str().parse::<u16>().unwrap_or(500))
                         } else {
                             500
                         };
@@ -233,35 +265,53 @@ async fn process_url(
 
             // Check if category exists in WooCommerce
             match wp.find_category_by_custom_field(id_ps_category).await {
-                Ok(category_info) => {
-                    match category_info.status.as_ref() {
-                        "found" => {
-                            println!("{}", format!("Category found: {:?}", category_info.category_name.as_deref().unwrap_or("Unknown")).cyan());
+                Ok(category_info) => match category_info.status.as_ref() {
+                    "found" => {
+                        println!(
+                            "{}",
+                            format!(
+                                "Category found: {:?}",
+                                category_info.category_name.as_deref().unwrap_or("Unknown")
+                            )
+                            .cyan()
+                        );
 
-                            if let Some(id) = category_info.category_id {
-                                current_wordpress_parent = id as i64;
-                            }
+                        if let Some(id) = category_info.category_id {
+                            current_wordpress_parent = id as i64;
                         }
-                        "notfound" => {
-                            println!("{}", "No category found".cyan());
-                            let name = breadcrumb.get("name").unwrap().to_string();
-
-                            match wp.create_category(name, current_wordpress_parent as u32, id_ps_category).await {
-                                Ok(response) => {
-                                    println!("{}", "Category created successfully".green());
-
-                                    if let Some(id_category) = response.get("id").and_then(|v| v.as_i64()) {
-                                        current_wordpress_parent = id_category;
-                                    } else {
-                                        eprintln!("{}", "Failed to extract parent_id from the response".red());
-                                    }
-                                }
-                                Err(e) => eprintln!("{}", format!("Failed to create category: {:?}", e).red()),
-                            }
-                        }
-                        _ => eprintln!("{}", format!("Failed to create category: {:?}", category_info.message).red()),
                     }
-                }
+                    "notfound" => {
+                        println!("{}", "No category found".cyan());
+                        let name = breadcrumb.get("name").unwrap().to_string();
+
+                        match wp
+                            .create_category(name, current_wordpress_parent as u32, id_ps_category)
+                            .await
+                        {
+                            Ok(response) => {
+                                println!("{}", "Category created successfully".green());
+
+                                if let Some(id_category) =
+                                    response.get("id").and_then(|v| v.as_i64())
+                                {
+                                    current_wordpress_parent = id_category;
+                                } else {
+                                    eprintln!(
+                                        "{}",
+                                        "Failed to extract parent_id from the response".red()
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("{}", format!("Failed to create category: {:?}", e).red())
+                            }
+                        }
+                    }
+                    _ => eprintln!(
+                        "{}",
+                        format!("Failed to create category: {:?}", category_info.message).red()
+                    ),
+                },
                 Err(e) => {
                     eprintln!("{}", format!("Failed to find category: {:?}", e).red());
                 }
@@ -293,10 +343,7 @@ async fn process_url(
 async fn send_url_to_flaresolverr(
     db: &Arc<Mutex<Connection>>,
     url: &str,
-) -> Result<(
-    reqwest::StatusCode,
-    extract_data::FlareSolverrResponse
-)> {
+) -> Result<(reqwest::StatusCode, extract_data::FlareSolverrResponse)> {
     // Create an HTTP client
     let client = Client::new();
 
@@ -321,7 +368,10 @@ async fn send_url_to_flaresolverr(
 
     // Get the status and body of the response
     let status = response.status();
-    let body: extract_data::FlareSolverrResponse = response.json().await.context("Failed to read response body")?;
+    let body: extract_data::FlareSolverrResponse = response
+        .json()
+        .await
+        .context("Failed to read response body")?;
 
     Ok((status, body))
 }

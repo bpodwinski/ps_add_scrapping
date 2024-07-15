@@ -1,6 +1,6 @@
 use anyhow::Result;
-use base64::{Engine, engine::general_purpose::STANDARD_NO_PAD};
-use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
+use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde_json::Value;
 
 use crate::wordpress::woocommerce::create_product::ProductCreationResult;
@@ -32,7 +32,10 @@ impl Auth {
         let credentials = format!("{}:{}", self.username, self.password);
         let encoded_credentials = STANDARD_NO_PAD.encode(credentials.as_bytes());
         let mut headers = HeaderMap::new();
-        headers.insert(AUTHORIZATION, HeaderValue::from_str(&format!("Basic {}", encoded_credentials))?);
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&format!("Basic {}", encoded_credentials))?,
+        );
 
         let content_type = content_type.unwrap_or("application/json");
         headers.insert(CONTENT_TYPE, HeaderValue::from_str(content_type)?);
@@ -81,11 +84,7 @@ pub trait CreateProduct {
 }
 
 pub trait FindProductByCustomField {
-    async fn find_product_by_custom_field(
-        &self,
-        name: &str,
-        status: &str,
-    ) -> Result<ProductInfo>;
+    async fn find_product_by_custom_field(&self, name: &str, status: &str) -> Result<ProductInfo>;
 }
 
 // pub trait CreatePage {
@@ -148,7 +147,12 @@ pub trait CreateCategory {
     /// - Sending the HTTP request.
     /// - Reading the response body.
     /// - Parsing the response body as JSON.
-    async fn create_category(&self, name: String, parent: u32, ps_addons_cat_id: u32) -> Result<Value>;
+    async fn create_category(
+        &self,
+        name: String,
+        parent: u32,
+        ps_addons_cat_id: u32,
+    ) -> Result<Value>;
 }
 
 // pub trait UploadImage {

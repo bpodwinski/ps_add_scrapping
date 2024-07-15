@@ -5,15 +5,17 @@ use tokio;
 use tokio::time::Instant;
 
 use crate::config::configuration;
-use crate::config::get_configuration::{get_configuration_value_as_i64, get_configuration_value_as_usize};
+use crate::config::get_configuration::{
+    get_configuration_value_as_i64, get_configuration_value_as_usize,
+};
 use crate::utilities::database;
 use crate::utilities::sitemap;
 
 mod config;
 mod extractors;
+mod process;
 mod utilities;
 mod wordpress;
-mod process;
 
 #[derive(Deserialize, Serialize, Debug)]
 struct JsonResponse {
@@ -37,7 +39,6 @@ struct RenderedItem {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
     // Initialize SQLite
     let db_init = match database::init::init().await {
         Ok(db) => {
@@ -45,7 +46,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             db
         }
         Err(e) => {
-            eprintln!("{}", format!("Failed to initialize database: {:?}", e).red());
+            eprintln!(
+                "{}",
+                format!("Failed to initialize database: {:?}", e).red()
+            );
             return Err(e.into());
         }
     };
@@ -58,7 +62,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Update sitemap
-    let sitemap_frequency_update = get_configuration_value_as_i64(&db, "sitemap_frequency_update").await?;
+    let sitemap_frequency_update =
+        get_configuration_value_as_i64(&db, "sitemap_frequency_update").await?;
 
     if let Err(e) = sitemap::sitemap_update::sitemap_update(&db, sitemap_frequency_update).await {
         eprintln!("{}", format!("Failed to update sitemap: {:?}", e).red());
@@ -77,7 +82,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let duration = start.elapsed();
-    println!("{}", format!("Time to process URLs: {:?}", duration).green());
+    println!(
+        "{}",
+        format!("Time to process URLs: {:?}", duration).green()
+    );
 
     Ok(())
 }

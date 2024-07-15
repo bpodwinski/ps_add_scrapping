@@ -22,7 +22,9 @@ impl FindProductByCustomField for Auth {
 
         let api_url = format!(
             "{}/wp-json/wc/v3/products?{}={}",
-            self.base_url(), custom_field_key, custom_field_value
+            self.base_url(),
+            custom_field_key,
+            custom_field_value
         );
 
         let response = client

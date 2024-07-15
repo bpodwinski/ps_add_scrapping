@@ -2,7 +2,8 @@ use scraper::{Html, Selector};
 
 pub fn extract_module_version(html_content: &str) -> String {
     let document = Html::parse_document(html_content);
-    let selector = Selector::parse("span.muik-about-module__title-version.puik-body-default").unwrap();
+    let selector =
+        Selector::parse("span.muik-about-module__title-version.puik-body-default").unwrap();
 
     // Select the first span with the specified class and extract its textual content
     document

@@ -65,7 +65,10 @@ impl CreateProduct for Auth {
 
         // Save the status before consuming the response
         let status_code = response.status().as_u16();
-        let response_body = response.text().await.context("Failed to read response body")?;
+        let response_body = response
+            .text()
+            .await
+            .context("Failed to read response body")?;
 
         let body_json: Result<Value, _> = from_str(&response_body);
 
@@ -77,7 +80,10 @@ impl CreateProduct for Auth {
 
         match status_code {
             200 | 201 => Ok(result),
-            _ => Err(anyhow::anyhow!(format!("HTTP {}: {}", status_code, response_body))),
+            _ => Err(anyhow::anyhow!(format!(
+                "HTTP {}: {}",
+                status_code, response_body
+            ))),
         }
     }
 }

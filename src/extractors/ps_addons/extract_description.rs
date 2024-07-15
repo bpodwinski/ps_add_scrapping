@@ -1,5 +1,5 @@
-use scraper::{Html, Selector};
 use scraper::element_ref::ElementRef;
+use scraper::{Html, Selector};
 
 /// Extracts and returns the HTML content from the description section.
 pub fn extract_description(html_content: &str) -> String {
@@ -15,7 +15,11 @@ pub fn extract_description(html_content: &str) -> String {
             while let Some(next) = next_element {
                 if let Some(next_ref) = ElementRef::wrap(next) {
                     // Check if this is the 'product-description__content'
-                    if next_ref.value().attr("class").map_or(false, |c| c.contains("product-description__content")) {
+                    if next_ref
+                        .value()
+                        .attr("class")
+                        .map_or(false, |c| c.contains("product-description__content"))
+                    {
                         // Return the raw HTML content from the 'product-description__content' div
 
                         // Nettoyer les balises div superflues s'il y en a

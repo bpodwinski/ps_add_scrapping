@@ -5,13 +5,10 @@ use chrono::{DateTime, FixedOffset, Utc};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use regex::Regex;
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use tokio::sync::Mutex;
 
-pub async fn insert_sitemap_into_sql(
-    db: &Arc<Mutex<Connection>>,
-    xml_content: &str,
-) -> Result<()> {
+pub async fn insert_sitemap_into_sql(db: &Arc<Mutex<Connection>>, xml_content: &str) -> Result<()> {
     let db = db.lock().await;
 
     let mut reader = Reader::from_str(xml_content);
@@ -32,7 +29,10 @@ pub async fn insert_sitemap_into_sql(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => match e.name().as_ref() {
                 b"loc" => {
-                    url = reader.read_text(e.name()).context("Failed to read loc text")?.parse()?;
+                    url = reader
+                        .read_text(e.name())
+                        .context("Failed to read loc text")?
+                        .parse()?;
 
                     // Skip non-product URLs
                     if url.contains(base_url) && url.contains(content_url) {
@@ -63,7 +63,10 @@ pub async fn insert_sitemap_into_sql(
                     }
                 }
                 b"lastmod" => {
-                    last_mod = reader.read_text(e.name()).context("Failed to read lastmod text")?.parse()?;
+                    last_mod = reader
+                        .read_text(e.name())
+                        .context("Failed to read lastmod text")?
+                        .parse()?;
 
                     // Verify the date format
                     if last_mod.parse::<DateTime<FixedOffset>>().is_err() {
@@ -72,13 +75,15 @@ pub async fn insert_sitemap_into_sql(
                     }
                 }
                 b"changefreq" => {
-                    change_freq = reader.read_text(e.name()).context("Failed to read changefreq text")?.parse()?;
+                    change_freq = reader
+                        .read_text(e.name())
+                        .context("Failed to read changefreq text")?
+                        .parse()?;
                 }
                 _ => (),
             },
             Ok(Event::End(ref e)) => {
                 if e.name().as_ref() == b"url" {
-
                     // Skip the insertion if marked to skip
                     if skip {
                         continue;
@@ -93,7 +98,13 @@ pub async fn insert_sitemap_into_sql(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => return Err(anyhow::anyhow!("Error at position {}: {:?}", reader.buffer_position(), e)),
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "Error at position {}: {:?}",
+                    reader.buffer_position(),
+                    e
+                ))
+            }
             _ => (),
         }
         buf.clear();
@@ -105,7 +116,8 @@ pub async fn insert_sitemap_into_sql(
         "INSERT INTO configuration (key, value) VALUES ('last_sitemap_insert_date', ?1)
         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         params![current_date],
-    ).context("Failed to insert or update last_xml_insert_date in the configuration table")?;
+    )
+    .context("Failed to insert or update last_xml_insert_date in the configuration table")?;
 
     Ok(())
 }
