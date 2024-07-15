@@ -1,6 +1,7 @@
 [package]
 name = "ps_add_scrapping"
 version = "0.1.0"
+authors = ["Benoît Podwinski <me@benoitpodwinski.com>"]
 edition = "2021"
 
 [dependencies]

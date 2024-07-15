@@ -1,4 +1,6 @@
-use anyhow::Result;
+use std::env;
+
+use anyhow::{Context, Result};
 use colored::*;
 use serde::{Deserialize, Serialize};
 use tokio;
@@ -39,6 +41,7 @@ struct RenderedItem {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+
     // Initialize SQLite
     let db_init = match database::init::init().await {
         Ok(db) => {
@@ -55,8 +58,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let db = &db_init.conn;
 
+    // Check if Settings.toml exists in the current working directory
+    let mut current_dir = env::current_exe().context("Failed to get current executable path")?;
+    current_dir.pop();
+    let config_path = current_dir.join("Settings.toml");
+    if !config_path.exists() {
+        eprintln!("{}", "Settings.toml file not found".red());
+        return Err(Box::from(anyhow::anyhow!("Settings.toml file not found")));
+    }
+
     // Load configuration
-    if let Err(e) = configuration::load_configuration(&db, "Settings.toml").await {
+    if let Err(e) = configuration::load_configuration(&db, config_path.to_str().unwrap()).await {
         eprintln!("{}", format!("Failed to load configuration: {:?}", e).red());
         return Err(e.into());
     }
