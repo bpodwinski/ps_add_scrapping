@@ -15,9 +15,9 @@ This project automates the **scraping of PrestaShop Addons** and imports the ext
 
 ---
 
-## 🛠 **Installation & Configuration**
+## **Installation & Configuration**
 
-### **1️⃣ Prerequisites**
+### **Prerequisites**
 Before running this project, ensure you have the following installed:
 
 - **Rust & Cargo** → [Install Rust](https://www.rust-lang.org/)
@@ -25,7 +25,9 @@ Before running this project, ensure you have the following installed:
 - **FlareSolverr** → Required to bypass anti-bot protections
 - **WordPress with WooCommerce** (API REST must be enabled)
 
-### **2️⃣ Installation**
+### **Installation**
+To extend WooCommerce’s API and allow product/category management, you need to install a custom WordPress plugin.
+
 Clone the repository and build the project:
 ```sh
 git clone https://github.com/bpodwinski/ps_add_scrapping.git
@@ -33,15 +35,15 @@ cd ps_add_scrapping
 cargo build
 ```
 
-### **3️⃣ How to Use**
+### **How to Use**
 1. **Rename `Settings.toml.example` to `Settings.toml`**  
 2. **Place `Settings.toml` in the same directory as the executable**  
 3. **Configure it with your settings**
 
 ---
 
-## 🚀 **Usage**
-### **1️⃣ Running the Scraper**
+## **Usage**
+### **Running the Scraper**
 ```sh
 cargo run --release
 ```
